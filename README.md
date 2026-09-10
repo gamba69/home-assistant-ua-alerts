@@ -1,6 +1,10 @@
 # UA Alerts
 
-Home Assistant custom integration · `ua_alerts` · v0.1.16
+Home Assistant integration for Ukrainian air alerts with `clear` / `yellow` / `red`
+alert levels, threat details, multi-area support, administrative coverage, and
+token-free polling.
+
+**Current release:** `0.1.19` · **Domain:** `ua_alerts`
 
 **English:** [Documentation](docs/en/README.md) · [Changelog](docs/en/CHANGELOG.md)
 

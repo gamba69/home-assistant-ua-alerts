@@ -10,7 +10,7 @@ pytest -q
 python -m compileall -q custom_components tests scripts
 ```
 
-Тестовий стек закріплено на Home Assistant `2026.9.1` і `pytest-homeassistant-custom-component==0.13.364`. CI використовує Python 3.13.
+Тестовий стек закріплено на Home Assistant `2026.9.1` і `pytest-homeassistant-custom-component==0.13.364`. CI використовує Python 3.14.
 
 ## Що перевіряється
 

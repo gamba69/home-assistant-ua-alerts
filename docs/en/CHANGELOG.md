@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.1.19
+- Fixed HA 2026.9 device-registry tests after removal of `DeviceEntry.translation_key`.
+- Synchronized release metadata and public documentation, and added a concise landing-page README description.
+
+## 0.1.18
+- Updated HA regression tests for current 2026.9 APIs and made version checks derive from `const.py`.
+- Synchronized the Python `VERSION` constant with the manifest.
+
+## 0.1.17
+- Fixed Hassfest manifest ordering and declared the config-entry-only schema.
+- Moved Project tests to Python 3.14 and configured pip caching for `requirements_test.txt`.
+
 ## 0.1.16
 
 - Made config-flow catalog wording neutral so a manually refreshed stored catalog is not incorrectly described as the bundled snapshot.

@@ -12,7 +12,7 @@ The integration uses the token-free Ubilling proxy for `alerts.in.ua` raw data:
 - Domain: `ua_alerts`
 - Integration directory: `custom_components/ua_alerts/`
 - Repository: `gamba69/home-assistant-ua-alerts`
-- Current release: **0.1.16**
+- Current release: **0.1.19**
 
 
 ## Highlights
@@ -155,7 +155,7 @@ The full raw source snapshot is deliberately excluded from diagnostics.
 The repository contains two layers of tests:
 
 1. HA-independent model/runtime tests covering validation, level precedence, threat handling, timestamps, stale/recovery, concurrency and lifecycle behavior.
-2. Home Assistant integration tests using `pytest-homeassistant-custom-component`, targeting Home Assistant 2026.9.x / Python 3.13.
+2. Home Assistant integration tests using `pytest-homeassistant-custom-component`, targeting Home Assistant 2026.9.x / Python 3.14.
 
 CI also includes Hassfest and HACS validation.
 

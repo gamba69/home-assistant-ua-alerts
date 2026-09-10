@@ -10,7 +10,7 @@ pytest -q
 python -m compileall -q custom_components tests scripts
 ```
 
-The test stack is pinned to Home Assistant `2026.9.1` and `pytest-homeassistant-custom-component==0.13.364`. CI uses Python 3.13.
+The test stack is pinned to Home Assistant `2026.9.1` and `pytest-homeassistant-custom-component==0.13.364`. CI uses Python 3.14.
 
 ## Test layers
 
