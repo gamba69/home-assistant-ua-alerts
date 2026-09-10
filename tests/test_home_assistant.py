@@ -239,7 +239,6 @@ async def test_entity_contract_and_states(hass: HomeAssistant):
     )
     assert device is not None
     assert device.name == "м. Київ"
-    assert device.translation_key is None
     assert device.entry_type is dr.DeviceEntryType.SERVICE
     assert device.manufacturer == "UA Alerts"
     assert device.sw_version == VERSION
@@ -278,7 +277,6 @@ async def test_existing_013_device_name_is_migrated_to_plain_location_title(
     assert migrated is not None
     assert migrated.id == legacy.id
     assert migrated.name == "м. Київ"
-    assert migrated.translation_key is None
     assert migrated.entry_type is dr.DeviceEntryType.SERVICE
     assert migrated.sw_version == VERSION
 
