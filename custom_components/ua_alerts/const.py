@@ -4,7 +4,7 @@ from __future__ import annotations
 
 DOMAIN = "ua_alerts"
 NAME = "UA Alerts"
-VERSION = "0.1.16"
+VERSION = "0.1.18"
 
 SOURCE_URL = "https://ubilling.net.ua/aerialalerts/?source=aiu&raw"
 DEFAULT_POLL_INTERVAL_SECONDS = 3.0

@@ -16,6 +16,7 @@ pytest.importorskip("pytest_homeassistant_custom_component")
 
 from homeassistant import config_entries
 from homeassistant.core import HomeAssistant
+from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
 from pytest_homeassistant_custom_component.common import MockConfigEntry
@@ -111,13 +112,13 @@ async def test_config_flow_and_duplicate_guard(hass: HomeAssistant):
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}
         )
-        assert result["type"] is config_entries.ConfigFlowResultType.MENU
+        assert result["type"] is FlowResultType.MENU
         assert result["step_id"] == "user"
         assert set(result["menu_options"]) == {"search", "tree"}
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"], {"next_step_id": "search"}
         )
-        assert result["type"] is config_entries.ConfigFlowResultType.FORM
+        assert result["type"] is FlowResultType.FORM
         assert result["step_id"] == "search"
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"], {"query": "Київ"}
@@ -126,7 +127,7 @@ async def test_config_flow_and_duplicate_guard(hass: HomeAssistant):
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"], {"search_uid": "31"}
         )
-        assert result["type"] is config_entries.ConfigFlowResultType.CREATE_ENTRY
+        assert result["type"] is FlowResultType.CREATE_ENTRY
         assert result["data"]["location_uid"] == "31"
 
         result = await hass.config_entries.flow.async_init(
@@ -141,7 +142,7 @@ async def test_config_flow_and_duplicate_guard(hass: HomeAssistant):
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"], {"search_uid": "31"}
         )
-        assert result["type"] is config_entries.ConfigFlowResultType.ABORT
+        assert result["type"] is FlowResultType.ABORT
         assert result["reason"] == "already_configured"
 
 
@@ -166,7 +167,7 @@ async def test_hierarchical_hromada_config_flow(hass: HomeAssistant):
         result = await hass.config_entries.flow.async_init(
             DOMAIN, context={"source": config_entries.SOURCE_USER}
         )
-        assert result["type"] is config_entries.ConfigFlowResultType.MENU
+        assert result["type"] is FlowResultType.MENU
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"], {"next_step_id": "tree"}
         )
@@ -186,7 +187,7 @@ async def test_hierarchical_hromada_config_flow(hass: HomeAssistant):
         result = await hass.config_entries.flow.async_configure(
             result["flow_id"], {"location_uid": "699"}
         )
-        assert result["type"] is config_entries.ConfigFlowResultType.CREATE_ENTRY
+        assert result["type"] is FlowResultType.CREATE_ENTRY
         assert result["data"]["location_uid"] == "699"
 
 
@@ -220,21 +221,21 @@ async def test_entity_contract_and_states(hass: HomeAssistant):
         "sensor", DOMAIN, "ua_alerts_31_data_health"
     )
     assert health_id == "sensor.ua_31_health"
-    assert hass.states[alert_id].state == "red"
-    assert hass.states[threats_id].state == "drones"
-    assert hass.states[alert_id].attributes["level_code"] == "red"
-    assert hass.states[threats_id].attributes["threat_codes"] == ["drones"]
-    assert hass.states[threats_id].attributes["threat_codes_csv"] == "drones"
-    assert hass.states[threats_id].attributes["threats"][0]["threat_type"] == "drones"
-    assert hass.states[air_id].state == "on"
-    assert hass.states[source_id].state == "on"
-    assert hass.states[health_id].state == "normal"
-    assert hass.states[health_id].attributes["consecutive_errors"] == 0
-    assert hass.states[health_id].attributes["http_status"] == 200
+    assert hass.states.get(alert_id).state == "red"
+    assert hass.states.get(threats_id).state == "drones"
+    assert hass.states.get(alert_id).attributes["level_code"] == "red"
+    assert hass.states.get(threats_id).attributes["threat_codes"] == ["drones"]
+    assert hass.states.get(threats_id).attributes["threat_codes_csv"] == "drones"
+    assert hass.states.get(threats_id).attributes["threats"][0]["threat_type"] == "drones"
+    assert hass.states.get(air_id).state == "on"
+    assert hass.states.get(source_id).state == "on"
+    assert hass.states.get(health_id).state == "normal"
+    assert hass.states.get(health_id).attributes["consecutive_errors"] == 0
+    assert hass.states.get(health_id).attributes["http_status"] == 200
 
     device_registry = dr.async_get(hass)
-    device = device_registry.async_get_device(
-        identifiers={(DOMAIN, "31")}, connections=set()
+    device = device_registry.async_get_device_by_identifier(
+        (DOMAIN, "31"), config_entry.entry_id
     )
     assert device is not None
     assert device.name == "м. Київ"
@@ -271,8 +272,8 @@ async def test_existing_013_device_name_is_migrated_to_plain_location_title(
         assert await hass.config_entries.async_setup(config_entry.entry_id)
         await hass.async_block_till_done()
 
-    migrated = device_registry.async_get_device(
-        identifiers={(DOMAIN, "31")}, connections=set()
+    migrated = device_registry.async_get_device_by_identifier(
+        (DOMAIN, "31"), config_entry.entry_id
     )
     assert migrated is not None
     assert migrated.id == legacy.id
@@ -526,17 +527,17 @@ async def test_stale_and_recovery_entity_availability(hass: HomeAssistant):
     session.push({"raw": None})
     assert not await runtime.async_fetch()
     await hass.async_block_till_done()
-    assert hass.states[alert_id].state == "unavailable"
-    assert hass.states[source_id].state == "off"
-    assert hass.states[health_id].state == "source_error"
+    assert hass.states.get(alert_id).state == "unavailable"
+    assert hass.states.get(source_id).state == "off"
+    assert hass.states.get(health_id).state == "source_error"
 
     current = base + timedelta(seconds=17)
     session.push(payload("yellow"))
     assert await runtime.async_fetch()
     await hass.async_block_till_done()
-    assert hass.states[alert_id].state == "yellow"
-    assert hass.states[source_id].state == "on"
-    assert hass.states[health_id].state == "normal"
+    assert hass.states.get(alert_id).state == "yellow"
+    assert hass.states.get(source_id).state == "on"
+    assert hass.states.get(health_id).state == "normal"
     await hass.config_entries.async_unload(config_entry.entry_id)
 
 
@@ -547,16 +548,16 @@ async def test_global_timing_options_update_live_runtime_and_all_entries(hass: H
     runtime = first.runtime_data.runtime
 
     result = await hass.config_entries.options.async_init(first.entry_id)
-    assert result["type"] is config_entries.ConfigFlowResultType.MENU
+    assert result["type"] is FlowResultType.MENU
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {"next_step_id": "timing"}
     )
-    assert result["type"] is config_entries.ConfigFlowResultType.FORM
+    assert result["type"] is FlowResultType.FORM
     assert result["step_id"] == "timing"
     result = await hass.config_entries.options.async_configure(
         result["flow_id"], {"poll_interval": 5, "stale_after": 20}
     )
-    assert result["type"] is config_entries.ConfigFlowResultType.CREATE_ENTRY
+    assert result["type"] is FlowResultType.CREATE_ENTRY
     assert first.options["poll_interval"] == 5
     assert first.options["stale_after"] == 20
     assert runtime.poll_interval == 5
@@ -577,7 +578,7 @@ async def test_alert_latency_is_end_to_end_first_observation_and_does_not_grow(
         "sensor", DOMAIN, "ua_alerts_31_alert_latency"
     )
     assert latency_id is not None
-    assert hass.states[latency_id].state == "unavailable"
+    assert hass.states.get(latency_id).state == "unavailable"
 
     current = datetime(2026, 9, 9, 12, 0, 14, tzinfo=UTC)
     runtime._now_fn = lambda: current
@@ -585,24 +586,24 @@ async def test_alert_latency_is_end_to_end_first_observation_and_does_not_grow(
     assert await runtime.async_fetch()
     await hass.async_block_till_done()
 
-    assert float(hass.states[latency_id].state) == 3.0
-    assert hass.states[latency_id].attributes["alert_started_at"] == "2026-09-09T12:00:11+00:00"
-    assert hass.states[latency_id].attributes["alert_detected_at"] == "2026-09-09T12:00:14+00:00"
-    assert hass.states[latency_id].attributes["level_code"] == "yellow"
+    assert float(hass.states.get(latency_id).state) == 3.0
+    assert hass.states.get(latency_id).attributes["alert_started_at"] == "2026-09-09T12:00:11+00:00"
+    assert hass.states.get(latency_id).attributes["alert_detected_at"] == "2026-09-09T12:00:14+00:00"
+    assert hass.states.get(latency_id).attributes["level_code"] == "yellow"
 
     # Same active alert 5 minutes later: latency is a frozen observation, not age.
     current = datetime(2026, 9, 9, 12, 5, 14, tzinfo=UTC)
     session.push(payload("yellow", started_at="2026-09-09T12:00:11+00:00"))
     assert await runtime.async_fetch()
     await hass.async_block_till_done()
-    assert float(hass.states[latency_id].state) == 3.0
+    assert float(hass.states.get(latency_id).state) == 3.0
 
     # Clear does not erase the last useful latency measurement.
     current = datetime(2026, 9, 9, 12, 6, 0, tzinfo=UTC)
     session.push({"raw": [], "cachedat": "2026-09-09 15:06:00"})
     assert await runtime.async_fetch()
     await hass.async_block_till_done()
-    assert float(hass.states[latency_id].state) == 3.0
+    assert float(hass.states.get(latency_id).state) == 3.0
 
     await hass.config_entries.async_unload(config_entry.entry_id)
 
@@ -692,15 +693,15 @@ async def test_hromada_inherits_parent_raion_alert(hass: HomeAssistant):
         "sensor", DOMAIN, "ua_alerts_726_threat_codes"
     )
     assert alert_id == "sensor.ua_726_level"
-    assert hass.states[alert_id].state == "yellow"
-    assert hass.states[alert_id].attributes["alert_scope"] == "inherited"
-    assert hass.states[alert_id].attributes["alert_source_location_uid"] == "76"
+    assert hass.states.get(alert_id).state == "yellow"
+    assert hass.states.get(alert_id).attributes["alert_scope"] == "inherited"
+    assert hass.states.get(alert_id).attributes["alert_source_location_uid"] == "76"
     assert (
-        hass.states[alert_id].attributes["alert_source_location_title"]
+        hass.states.get(alert_id).attributes["alert_source_location_title"]
         == "Обухівський район"
     )
-    assert hass.states[alert_id].attributes["active_alert_location_uids"] == ["76"]
-    assert hass.states[threats_id].attributes["threat_codes"] == ["drones"]
+    assert hass.states.get(alert_id).attributes["active_alert_location_uids"] == ["76"]
+    assert hass.states.get(threats_id).attributes["threat_codes"] == ["drones"]
 
     assert await hass.config_entries.async_unload(config_entry.entry_id)
 
@@ -741,15 +742,16 @@ async def test_raion_partial_alert_has_coverage_sensor_and_raw_code_lists(
     )
     assert alert_id == "sensor.ua_76_level"
     assert coverage_id == "sensor.ua_76_coverage"
-    assert hass.states[alert_id].state == "red"
-    assert hass.states[alert_id].attributes["level_code"] == "red"
-    assert hass.states[alert_id].attributes["possible_level_codes"] == [
+    assert hass.states.get(alert_id).state == "red"
+    assert hass.states.get(alert_id).attributes["level_code"] == "red"
+    assert hass.states.get(alert_id).attributes["possible_level_codes"] == [
         "clear",
         "yellow",
         "red",
     ]
 
-    coverage = hass.states[coverage_id]
+    coverage = hass.states.get(coverage_id)
+    assert coverage is not None
     assert coverage.state == "partial"
     assert coverage.attributes["coverage_code"] == "partial"
     assert coverage.attributes["possible_coverage_codes"] == [

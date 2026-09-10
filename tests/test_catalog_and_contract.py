@@ -8,10 +8,19 @@ ROOT = Path(__file__).resolve().parents[1]
 INTEGRATION = ROOT / "custom_components" / "ua_alerts"
 
 
+def _integration_version_from_const() -> str:
+    """Return the integration version declared by the Python package."""
+    source = (INTEGRATION / "const.py").read_text(encoding="utf-8")
+    match = re.search(r'^VERSION = "([^"]+)"$', source, re.MULTILINE)
+    assert match is not None
+    return match.group(1)
+
+
 def test_manifest_contract():
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["domain"] == "ua_alerts"
-    assert manifest["version"] == "0.1.16"
+    assert manifest["version"] == _integration_version_from_const()
+    assert re.fullmatch(r"\d+\.\d+\.\d+", manifest["version"])
     assert manifest["config_flow"] is True
     assert manifest["iot_class"] == "cloud_polling"
 
@@ -80,10 +89,11 @@ def test_repository_has_readme_and_hacs_validation_workflows():
     assert (ROOT / ".github" / "workflows" / "hassfest.yaml").is_file()
 
 
-def test_ci_targets_python_313_and_current_ha_test_stack():
+def test_ci_targets_python_314_and_current_ha_test_stack():
     workflow = (ROOT / ".github" / "workflows" / "tests.yaml").read_text(encoding="utf-8")
     requirements = (ROOT / "requirements_test.txt").read_text(encoding="utf-8")
-    assert 'python-version: "3.13"' in workflow
+    assert 'python-version: "3.14"' in workflow
+    assert "cache-dependency-path: requirements_test.txt" in workflow
     assert "homeassistant==2026.9.1" in requirements
     assert "pytest-homeassistant-custom-component==0.13.364" in requirements
 
@@ -189,8 +199,7 @@ def test_device_name_is_raw_catalog_title_and_service_metadata_is_useful():
     assert "serial_number=None" in source
 
     # One version source for both the manifest and the device info card.
-    assert 'VERSION = "0.1.16"' in const_source
-    assert manifest["version"] == "0.1.16"
+    assert manifest["version"] == _integration_version_from_const()
 
 
 def test_device_translations_removed_because_device_name_is_locale_neutral():
