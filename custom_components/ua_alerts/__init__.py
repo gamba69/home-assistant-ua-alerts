@@ -9,6 +9,7 @@ import logging
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.const import Platform
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers import config_validation as cv
 from homeassistant.helpers import entity_registry as er
 from homeassistant.util import slugify
 
@@ -22,6 +23,8 @@ from .runtime import UAAlertsRuntime
 from .settings import async_get_settings
 
 _LOGGER = logging.getLogger(__name__)
+
+CONFIG_SCHEMA = cv.config_entry_only_config_schema(DOMAIN)
 
 _LEGACY_DIAGNOSTIC_SENSOR_KEYS = (
     "data_age",
