@@ -19,6 +19,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.data_entry_flow import FlowResultType
 from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers import entity_registry as er
+from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
 from custom_components.ua_alerts.const import DOMAIN, SOURCE_URL, VERSION
@@ -497,6 +498,7 @@ async def test_upgrade_migrates_latency_entity_to_last_alert_delay(
 async def test_multi_entry_one_runtime_one_initial_request(hass: HomeAssistant):
     source = {"raw": [payload("red", "31")["raw"][0], payload("yellow", "14")["raw"][0]]}
     session = FakeSession([source])
+    assert await async_setup_component(hass, DOMAIN, {})
     first = entry()
     second = entry("14", "Київська область", "oblast")
     first.add_to_hass(hass)
