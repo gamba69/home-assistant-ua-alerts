@@ -199,9 +199,9 @@ async def test_entity_contract_and_states(hass: HomeAssistant):
 
     registry = er.async_get(hass)
     entries = er.async_entries_for_config_entry(registry, config_entry.entry_id)
-    assert len(entries) == 7
+    assert len(entries) == 9
     enabled = [item for item in entries if not item.disabled]
-    assert len(enabled) == 7
+    assert len(enabled) == 9
 
     alert_id = registry.async_get_entity_id("sensor", DOMAIN, "ua_alerts_31_alert_level")
     threats_id = registry.async_get_entity_id("sensor", DOMAIN, "ua_alerts_31_threat_codes")
@@ -212,11 +212,17 @@ async def test_entity_contract_and_states(hass: HomeAssistant):
     assert air_id == "binary_sensor.ua_31_alert"
     assert source_id == "binary_sensor.ua_31_source"
     assert registry.async_get_entity_id(
-        "sensor", DOMAIN, "ua_alerts_31_alert_latency"
-    ) == "sensor.ua_31_alert_latency"
+        "sensor", DOMAIN, "ua_alerts_31_last_alert_duration"
+    ) == "sensor.ua_31_last_alert_duration"
     assert registry.async_get_entity_id(
-        "sensor", DOMAIN, "ua_alerts_31_threat_latency"
-    ) == "sensor.ua_31_threat_latency"
+        "sensor", DOMAIN, "ua_alerts_31_last_alert_level"
+    ) == "sensor.ua_31_last_alert_level"
+    assert registry.async_get_entity_id(
+        "sensor", DOMAIN, "ua_alerts_31_last_alert_delay"
+    ) == "sensor.ua_31_last_alert_delay"
+    assert registry.async_get_entity_id(
+        "sensor", DOMAIN, "ua_alerts_31_last_threat_delay"
+    ) == "sensor.ua_31_last_threat_delay"
     health_id = registry.async_get_entity_id(
         "sensor", DOMAIN, "ua_alerts_31_data_health"
     )
@@ -454,6 +460,40 @@ async def test_readded_entry_preserves_custom_deleted_threat_id(hass: HomeAssist
     assert await hass.config_entries.async_unload(config_entry.entry_id)
 
 
+async def test_upgrade_migrates_latency_entity_to_last_alert_delay(
+    hass: HomeAssistant,
+):
+    session = FakeSession([{"raw": []}])
+    config_entry = entry()
+    config_entry.add_to_hass(hass)
+    registry = er.async_get(hass)
+    legacy = registry.async_get_or_create(
+        "sensor",
+        DOMAIN,
+        "ua_alerts_31_alert_latency",
+        config_entry=config_entry,
+        suggested_object_id="ua_31_alert_latency",
+    )
+    old_entity_id = legacy.entity_id
+
+    with patch(
+        "homeassistant.helpers.aiohttp_client.async_get_clientsession",
+        return_value=session,
+    ):
+        assert await hass.config_entries.async_setup(config_entry.entry_id)
+        await hass.async_block_till_done()
+
+    assert registry.async_get_entity_id(
+        "sensor", DOMAIN, "ua_alerts_31_last_alert_delay"
+    ) == "sensor.ua_31_last_alert_delay"
+    assert registry.async_get_entity_id(
+        "sensor", DOMAIN, "ua_alerts_31_alert_latency"
+    ) is None
+    if old_entity_id != "sensor.ua_31_last_alert_delay":
+        assert hass.states.get(old_entity_id) is None
+    await hass.config_entries.async_unload(config_entry.entry_id)
+
+
 async def test_multi_entry_one_runtime_one_initial_request(hass: HomeAssistant):
     source = {"raw": [payload("red", "31")["raw"][0], payload("yellow", "14")["raw"][0]]}
     session = FakeSession([source])
@@ -563,7 +603,51 @@ async def test_global_timing_options_update_live_runtime_and_all_entries(hass: H
     await hass.config_entries.async_unload(first.entry_id)
 
 
-async def test_alert_latency_is_end_to_end_first_observation_and_does_not_grow(
+async def test_last_alert_duration_and_maximum_level(hass: HomeAssistant):
+    session = FakeSession([{"raw": [], "cachedat": "2026-09-09 15:00:10"}])
+    config_entry = entry()
+    await setup_with_session(hass, config_entry, session)
+    runtime = config_entry.runtime_data.runtime
+    registry = er.async_get(hass)
+    duration_id = registry.async_get_entity_id(
+        "sensor", DOMAIN, "ua_alerts_31_last_alert_duration"
+    )
+    level_id = registry.async_get_entity_id(
+        "sensor", DOMAIN, "ua_alerts_31_last_alert_level"
+    )
+    assert duration_id is not None
+    assert level_id is not None
+    assert hass.states.get(duration_id).state == "unavailable"
+    assert hass.states.get(level_id).state == "unavailable"
+
+    current = datetime(2026, 9, 9, 12, 0, 14, tzinfo=UTC)
+    runtime._now_fn = lambda: current
+    session.push(payload("yellow", started_at="2026-09-09T12:00:11+00:00"))
+    assert await runtime.async_fetch()
+    await hass.async_block_till_done()
+
+    current = datetime(2026, 9, 9, 12, 1, 0, tzinfo=UTC)
+    session.push(payload("red", started_at="2026-09-09T12:00:11+00:00"))
+    assert await runtime.async_fetch()
+    await hass.async_block_till_done()
+
+    current = datetime(2026, 9, 9, 12, 4, 0, tzinfo=UTC)
+    session.push({"raw": [], "cachedat": "2026-09-09 15:04:00"})
+    assert await runtime.async_fetch()
+    await hass.async_block_till_done()
+
+    assert float(hass.states.get(duration_id).state) == 229.0
+    assert hass.states.get(level_id).state == "red"
+    assert hass.states.get(duration_id).attributes["last_alert_started_at"] == (
+        "2026-09-09T12:00:11+00:00"
+    )
+    assert hass.states.get(duration_id).attributes["last_alert_ended_at"] == (
+        "2026-09-09T12:04:00+00:00"
+    )
+    await hass.config_entries.async_unload(config_entry.entry_id)
+
+
+async def test_last_alert_delay_is_end_to_end_first_observation_and_does_not_grow(
     hass: HomeAssistant,
 ):
     session = FakeSession([{"raw": [], "cachedat": "2026-09-09 15:00:10"}])
@@ -573,7 +657,7 @@ async def test_alert_latency_is_end_to_end_first_observation_and_does_not_grow(
 
     registry = er.async_get(hass)
     latency_id = registry.async_get_entity_id(
-        "sensor", DOMAIN, "ua_alerts_31_alert_latency"
+        "sensor", DOMAIN, "ua_alerts_31_last_alert_delay"
     )
     assert latency_id is not None
     assert hass.states.get(latency_id).state == "unavailable"
@@ -644,7 +728,7 @@ async def test_upgrade_removes_obsolete_high_churn_diagnostic_entities(
         ) is None
 
     assert registry.async_get_entity_id(
-        "sensor", DOMAIN, "ua_alerts_31_alert_latency"
+        "sensor", DOMAIN, "ua_alerts_31_last_alert_delay"
     ) is not None
     await hass.config_entries.async_unload(config_entry.entry_id)
 
@@ -730,7 +814,7 @@ async def test_raion_partial_alert_has_coverage_sensor_and_raw_code_lists(
 
     registry = er.async_get(hass)
     entries = er.async_entries_for_config_entry(registry, config_entry.entry_id)
-    assert len(entries) == 8
+    assert len(entries) == 10
 
     alert_id = registry.async_get_entity_id(
         "sensor", DOMAIN, "ua_alerts_76_alert_level"

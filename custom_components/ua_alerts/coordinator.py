@@ -25,6 +25,12 @@ from .const import (
     ATTR_ALERT_STARTED_AT,
     ATTR_COVERAGE_CODE,
     ATTR_FULL_LEVEL_CODE,
+    ATTR_LAST_ALERT_DELAY,
+    ATTR_LAST_ALERT_DURATION,
+    ATTR_LAST_ALERT_ENDED_AT,
+    ATTR_LAST_ALERT_LEVEL,
+    ATTR_LAST_ALERT_STARTED_AT,
+    ATTR_LAST_THREAT_DELAY,
     ATTR_PARTIAL_LEVEL_CODE,
     ATTR_LOCATION_UID,
     ATTR_NEW_LEVEL,
@@ -50,6 +56,7 @@ from .const import (
 from .health import evaluate_data_health
 from .latency_storage import LatencyStorage, RestoredLatencyMeasurements
 from .models import (
+    AlertHistoryTracker,
     AlertLatencyTracker,
     LocationDefinition,
     LocationState,
@@ -127,6 +134,10 @@ class UAAlertsCoordinator(DataUpdateCoordinator[LocationState]):
         # End-to-end alert latency is measured only on a clear -> active transition
         # and then frozen. Startup in the middle of an already-active alert is not
         # misreported as source/network latency.
+        self._history_tracker = AlertHistoryTracker(
+            active=restored_latencies.active_alert,
+            measurement=restored_latencies.last_alert,
+        )
         self._latency_tracker = AlertLatencyTracker(
             measurement=restored_latencies.alert
         )
@@ -182,9 +193,17 @@ class UAAlertsCoordinator(DataUpdateCoordinator[LocationState]):
 
     def _state_with_last_latencies(self, state: LocationState) -> LocationState:
         """Attach the last completed alert and threat latency measurements."""
+        history_measurement = self._history_tracker.measurement
         alert_measurement = self._latency_tracker.measurement
         threat_measurement = self._threat_latency_tracker.measurement
         updates: dict[str, Any] = {}
+        if history_measurement is not None:
+            updates.update(
+                last_alert_started_at=history_measurement.alert_started_at,
+                last_alert_ended_at=history_measurement.ended_at,
+                last_alert_duration=history_measurement.seconds,
+                last_alert_level=history_measurement.max_level,
+            )
         if alert_measurement is not None:
             updates.update(
                 latency_alert_started_at=alert_measurement.alert_started_at,
@@ -279,12 +298,17 @@ class UAAlertsCoordinator(DataUpdateCoordinator[LocationState]):
         if not state.data_valid or state.level is None:
             return self._state_with_last_latencies(state)
 
+        previous_active_alert = self._history_tracker.active
+        previous_history_measurement = self._history_tracker.measurement
         previous_alert_measurement = self._latency_tracker.measurement
         previous_threat_measurement = self._threat_latency_tracker.measurement
+        self._history_tracker.observe(state)
         self._latency_tracker.observe(state)
         self._threat_latency_tracker.observe(state)
         if (
-            self._latency_tracker.measurement != previous_alert_measurement
+            self._history_tracker.active != previous_active_alert
+            or self._history_tracker.measurement != previous_history_measurement
+            or self._latency_tracker.measurement != previous_alert_measurement
             or self._threat_latency_tracker.measurement != previous_threat_measurement
         ):
             self._schedule_latency_save()
@@ -333,6 +357,8 @@ class UAAlertsCoordinator(DataUpdateCoordinator[LocationState]):
                 await self._latency_storage.async_save(
                     self._latency_tracker.measurement,
                     self._threat_latency_tracker.measurement,
+                    active_alert=self._history_tracker.active,
+                    last_alert=self._history_tracker.measurement,
                 )
             except Exception:
                 _LOGGER.exception(
@@ -377,6 +403,12 @@ class UAAlertsCoordinator(DataUpdateCoordinator[LocationState]):
             ATTR_THREAT_DETECTED_AT: state.threat_detected_at,
             ATTR_THREAT_LATENCY: state.threat_latency,
             ATTR_THREAT_SOURCE_MESSAGE: state.threat_latency_source_message,
+            ATTR_LAST_ALERT_STARTED_AT: state.last_alert_started_at,
+            ATTR_LAST_ALERT_ENDED_AT: state.last_alert_ended_at,
+            ATTR_LAST_ALERT_DURATION: state.last_alert_duration,
+            ATTR_LAST_ALERT_LEVEL: state.last_alert_level,
+            ATTR_LAST_ALERT_DELAY: state.alert_latency,
+            ATTR_LAST_THREAT_DELAY: state.threat_latency,
             ATTR_SOURCE_UPDATED_AT: state.source_updated_at,
             ATTR_RECEIVED_AT: state.received_at,
         }

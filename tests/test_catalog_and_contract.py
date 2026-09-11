@@ -57,14 +57,14 @@ def test_location_catalog_has_unique_uids_and_required_examples():
 def test_exact_entity_contract_no_extras():
     sensor_source = (INTEGRATION / "sensor.py").read_text(encoding="utf-8")
     binary_source = (INTEGRATION / "binary_sensor.py").read_text(encoding="utf-8")
-    for key in ("alert_level", "alert_coverage", "threat_codes", "alert_latency", "threat_latency", "data_health"):
+    for key in ("alert_level", "alert_coverage", "threat_codes", "last_alert_duration", "last_alert_level", "last_alert_delay", "last_threat_delay", "data_health"):
         assert f'key="{key}"' in sensor_source
     for removed in (
         "data_age", "event_time", "source_updated", "received_at",
         "source_processing_latency", "delivery_latency", "observed_latency",
     ):
         assert f'key="{removed}"' not in sensor_source
-    assert len(re.findall(r'UAAlertsSensorDescription\(\s*key="', sensor_source)) == 6
+    assert len(re.findall(r'UAAlertsSensorDescription\(\s*key="', sensor_source)) == 8
     for key in ("air_alert", "source_available"):
         assert f'key="{key}"' in binary_source
     assert len(re.findall(r'UAAlertsBinarySensorDescription\(\s*key="', binary_source)) == 2
@@ -221,58 +221,51 @@ def test_catalog_refresh_is_explicit_in_both_setup_and_options():
     assert 'menu_options=["timing", "refresh_catalog"]' in source
 
 
-def test_latency_sensor_is_single_stable_diagnostic():
+def test_last_alert_state_sensor_contract():
     sensor_source = (INTEGRATION / "sensor.py").read_text(encoding="utf-8")
     coordinator_source = (INTEGRATION / "coordinator.py").read_text(encoding="utf-8")
     models_source = (INTEGRATION / "models.py").read_text(encoding="utf-8")
-    init_source = (INTEGRATION / "__init__.py").read_text(encoding="utf-8")
 
-    assert 'key="alert_latency"' in sensor_source
-    assert "state.alert_latency" in sensor_source
-    assert "AlertLatencyTracker" in coordinator_source
-    assert "last valid clear" not in coordinator_source.lower()  # no time-growing approximation
-    assert "clear -> active" in coordinator_source
-    assert "state.received_at - state.alert_started_at" in models_source
-    for obsolete in (
-        "data_age", "event_time", "source_updated", "received_at",
-        "source_processing_latency", "delivery_latency", "observed_latency",
+    for key in (
+        "last_alert_duration", "last_alert_level",
+        "last_alert_delay", "last_threat_delay",
     ):
-        assert obsolete in init_source  # explicit registry cleanup during upgrade
+        assert f'key="{key}"' in sensor_source
+    assert 'key="alert_latency"' not in sensor_source
+    assert 'key="threat_latency"' not in sensor_source
+    assert "AlertHistoryTracker" in coordinator_source
+    assert "ActiveAlertLifecycle" in models_source
+    assert "LastAlertMeasurement" in models_source
+    assert "EntityCategory.DIAGNOSTIC" in sensor_source  # data_health only
 
 
-def test_translation_catalogues_have_two_meaningful_latency_sensors():
+def test_translation_catalogues_have_last_alert_state_names():
     expected = {
-        "en": ("Alert latency", "Threat latency"),
-        "ru": ("Задержка тревоги", "Задержка угрозы"),
-        "uk": ("Затримка тривоги", "Затримка загрози"),
+        "en": (
+            "Last alert duration", "Last alert level",
+            "Last alert delay", "Last threat delay",
+        ),
+        "ru": (
+            "Длительность последней тревоги", "Уровень последней тревоги",
+            "Задержка последней тревоги", "Задержка последней угрозы",
+        ),
+        "uk": (
+            "Тривалість останньої тривоги", "Рівень останньої тривоги",
+            "Затримка останньої тривоги", "Затримка останньої загрози",
+        ),
     }
-    for lang, (alert_name, threat_name) in expected.items():
+    for lang, names in expected.items():
         data = json.loads(
             (INTEGRATION / "translations" / f"{lang}.json").read_text(encoding="utf-8")
         )
         sensors = data["entity"]["sensor"]
-        assert set(sensors) == {
-            "alert_level", "alert_coverage", "threat_codes", "alert_latency",
-            "threat_latency", "data_health"
-        }
-        assert sensors["alert_latency"]["name"] == alert_name
-        assert sensors["threat_latency"]["name"] == threat_name
-
-
-def test_threat_latency_sensor_tracks_latest_new_threat_without_time_growth():
-    sensor_source = (INTEGRATION / "sensor.py").read_text(encoding="utf-8")
-    coordinator_source = (INTEGRATION / "coordinator.py").read_text(encoding="utf-8")
-    models_source = (INTEGRATION / "models.py").read_text(encoding="utf-8")
-
-    assert 'key="threat_latency"' in sensor_source
-    assert "state.threat_latency" in sensor_source
-    assert "ThreatLatencyTracker" in coordinator_source
-    assert "state.received_at - threat.started_at" in models_source
-    assert "seen_instances" in models_source
-    assert "threat.instance_key" in models_source
-    assert "ATTR_THREAT_CODE" in sensor_source
-    assert "ATTR_THREAT_STARTED_AT" in sensor_source
-    assert "ATTR_THREAT_DETECTED_AT" in sensor_source
+        keys = (
+            "last_alert_duration", "last_alert_level",
+            "last_alert_delay", "last_threat_delay",
+        )
+        assert tuple(sensors[key]["name"] for key in keys) == names
+        assert "alert_latency" not in sensors
+        assert "threat_latency" not in sensors
 
 
 def test_bundled_catalog_is_full_and_preserves_current_hierarchy():

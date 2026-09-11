@@ -1138,11 +1138,21 @@
           "tactic_aircraft_activity_and_strategic_aircraft_activity_and_mig31k_departure_and_ballistic_missiles_and_cruise_missiles_and_unspecified_missiles_and_drones_and_guided_aerial_bombs_and_air_defense_and_unknown": "Тактична авіація, Стратегічна авіація, Виліт МіГ-31К, Балістичні ракети, Крилаті ракети, Ракетна загроза, БпЛА, Керовані авіабомби, Робота ППО, Невідома загроза"
         }
       },
-      "alert_latency": {
-        "name": "Затримка тривоги"
+      "last_alert_duration": {
+        "name": "Тривалість останньої тривоги"
       },
-      "threat_latency": {
-        "name": "Затримка загрози"
+      "last_alert_level": {
+        "name": "Рівень останньої тривоги",
+        "state": {
+          "yellow": "Жовтий",
+          "red": "Червоний"
+        }
+      },
+      "last_alert_delay": {
+        "name": "Затримка останньої тривоги"
+      },
+      "last_threat_delay": {
+        "name": "Затримка останньої загрози"
       },
       "data_health": {
         "name": "Стан даних",

@@ -8,8 +8,10 @@ ENTITY_ID_SPECS: dict[str, tuple[str, str]] = {
     "alert_level": ("sensor", "level"),
     "alert_coverage": ("sensor", "coverage"),
     "threat_codes": ("sensor", "threats"),
-    "alert_latency": ("sensor", "alert_latency"),
-    "threat_latency": ("sensor", "threat_latency"),
+    "last_alert_duration": ("sensor", "last_alert_duration"),
+    "last_alert_level": ("sensor", "last_alert_level"),
+    "last_alert_delay": ("sensor", "last_alert_delay"),
+    "last_threat_delay": ("sensor", "last_threat_delay"),
     "data_health": ("sensor", "health"),
     "air_alert": ("binary_sensor", "alert"),
     "source_available": ("binary_sensor", "source"),
@@ -35,13 +37,7 @@ def short_entity_id(location_uid: str, key: str) -> str:
 
 
 def legacy_default_entity_id(location_slug: str, key: str) -> str:
-    """Return the pre-0.1.8 automatically generated entity id.
-
-    Before UID-based ``suggested_object_id`` values were introduced, Home
-    Assistant generated entity IDs from the device/location name plus the
-    entity description key.  Deleted registry entries preserve that old ID and
-    can restore it when the same unique_id is created again.
-    """
+    """Return the pre-0.1.8 automatically generated entity id."""
     try:
         domain, _ = ENTITY_ID_SPECS[key]
     except KeyError as err:

@@ -1138,11 +1138,21 @@
           "tactic_aircraft_activity_and_strategic_aircraft_activity_and_mig31k_departure_and_ballistic_missiles_and_cruise_missiles_and_unspecified_missiles_and_drones_and_guided_aerial_bombs_and_air_defense_and_unknown": "Тактическая, Стратегическая, МиГ-31К, Баллистика, Крылатые, Ракеты, БПЛА, КАБ, ПВО, Неизвестно"
         }
       },
-      "alert_latency": {
-        "name": "Задержка тревоги"
+      "last_alert_duration": {
+        "name": "Длительность последней тревоги"
       },
-      "threat_latency": {
-        "name": "Задержка угрозы"
+      "last_alert_level": {
+        "name": "Уровень последней тревоги",
+        "state": {
+          "yellow": "Жёлтый",
+          "red": "Красный"
+        }
+      },
+      "last_alert_delay": {
+        "name": "Задержка последней тревоги"
+      },
+      "last_threat_delay": {
+        "name": "Задержка последней угрозы"
       },
       "data_health": {
         "name": "Состояние данных",

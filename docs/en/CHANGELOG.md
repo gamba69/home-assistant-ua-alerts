@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.20
+- Replaced the diagnostic `Alert latency` / `Threat latency` entities with ordinary state sensors `Last alert delay` and `Last threat delay`, preserving the measurements across upgrade through entity-registry migration.
+- Added `Last alert duration` and `Last alert level` (maximum yellow/red level) for the latest fully observed completed alert.
+- Added persistent alert lifecycle state so a normally observed alert survives a Home Assistant restart and is finalized correctly after `clear`; stale/source/data errors never close an alert.
+- Startup in the middle of an untracked active alert deliberately does not fabricate last-alert duration or maximum level.
+
 ## 0.1.19
 - Fixed HA 2026.9 device-registry tests after removal of `DeviceEntry.translation_key`.
 - Synchronized release metadata and public documentation, and added a concise landing-page README description.

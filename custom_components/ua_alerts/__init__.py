@@ -48,6 +48,42 @@ def _async_remove_legacy_diagnostic_entities(hass: HomeAssistant, entry: ConfigE
         if entity_id is not None:
             registry.async_remove(entity_id)
 
+def _async_migrate_last_delay_entities(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    """Migrate 0.1.19 latency entities to their 0.1.20 Last ... names."""
+    registry = er.async_get(hass)
+    location_uid = str(entry.data[CONF_LOCATION_UID])
+    location_slug = slugify(str(entry.data[CONF_LOCATION_TITLE]))
+    migrations = (
+        ("alert_latency", "last_alert_delay"),
+        ("threat_latency", "last_threat_delay"),
+    )
+    for old_key, new_key in migrations:
+        old_unique_id = f"{DOMAIN}_{location_uid}_{old_key}"
+        entity_id = registry.async_get_entity_id("sensor", DOMAIN, old_unique_id)
+        if entity_id is None:
+            continue
+
+        new_unique_id = f"{DOMAIN}_{location_uid}_{new_key}"
+        if registry.async_get_entity_id("sensor", DOMAIN, new_unique_id) is not None:
+            _LOGGER.warning(
+                "Cannot migrate %s because %s already exists",
+                old_unique_id,
+                new_unique_id,
+            )
+            continue
+
+        automatic_ids = {
+            f"sensor.ua_{location_uid}_{old_key}",
+            f"sensor.{location_slug}_{old_key}",
+        }
+        update: dict[str, str] = {"new_unique_id": new_unique_id}
+        if entity_id in automatic_ids:
+            target = f"sensor.ua_{location_uid}_{new_key}"
+            if registry.async_get(target) is None:
+                update["new_entity_id"] = target
+
+        registry.async_update_entity(entity_id, **update)
+
 
 def _async_migrate_default_entity_ids(hass: HomeAssistant, entry: ConfigEntry) -> None:
     """Shorten legacy automatically generated entity IDs.
@@ -185,6 +221,7 @@ async def _async_remove_runtime_if_unused(
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Set up one configured territory."""
     _async_remove_legacy_diagnostic_entities(hass, entry)
+    _async_migrate_last_delay_entities(hass, entry)
     _async_migrate_default_entity_ids(hass, entry)
     settings = await async_get_settings(hass)
     if dict(entry.options) != settings.as_options():

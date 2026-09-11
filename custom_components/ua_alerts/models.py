@@ -88,6 +88,106 @@ class ParsedSnapshot:
 
 
 @dataclass(frozen=True, slots=True)
+class ActiveAlertLifecycle:
+    """One fully observed alert currently in progress."""
+
+    alert_started_at: datetime
+    max_level: str
+
+
+@dataclass(frozen=True, slots=True)
+class LastAlertMeasurement:
+    """One fully observed completed alert."""
+
+    alert_started_at: datetime
+    ended_at: datetime
+    seconds: float
+    max_level: str
+
+
+@dataclass(slots=True)
+class AlertHistoryTracker:
+    """Track the latest fully observed alert lifecycle.
+
+    A first snapshot that is already active only establishes a baseline. It
+    cannot produce a trustworthy last-alert level because HA did not observe
+    the beginning of that alert. A restored active lifecycle is different:
+    its start and maximum level were already observed before the restart, so
+    tracking continues normally.
+    """
+
+    has_valid_baseline: bool = False
+    last_level: str | None = None
+    active: ActiveAlertLifecycle | None = None
+    measurement: LastAlertMeasurement | None = None
+
+    def observe(self, state: "LocationState") -> LastAlertMeasurement | None:
+        """Observe one valid snapshot and return the latest completed alert."""
+        if (
+            not state.data_valid
+            or state.level is None
+            or state.received_at is None
+        ):
+            return self.measurement
+
+        if not self.has_valid_baseline:
+            self.has_valid_baseline = True
+            if self.active is not None:
+                if state.level == ALERT_LEVEL_CLEAR:
+                    self._finish(state.received_at)
+                else:
+                    self._update_max(state.level)
+            self.last_level = state.level
+            return self.measurement
+
+        if self.active is not None:
+            if state.level == ALERT_LEVEL_CLEAR:
+                self._finish(state.received_at)
+            else:
+                self._update_max(state.level)
+        elif (
+            self.last_level == ALERT_LEVEL_CLEAR
+            and state.level != ALERT_LEVEL_CLEAR
+            and state.alert_started_at is not None
+        ):
+            self.active = ActiveAlertLifecycle(
+                alert_started_at=state.alert_started_at,
+                max_level=state.level,
+            )
+
+        self.last_level = state.level
+        return self.measurement
+
+    def _update_max(self, level: str) -> None:
+        active = self.active
+        if active is None:
+            return
+        if ALERT_LEVEL_PRIORITY.get(level, 0) <= ALERT_LEVEL_PRIORITY.get(
+            active.max_level, 0
+        ):
+            return
+        self.active = ActiveAlertLifecycle(
+            alert_started_at=active.alert_started_at,
+            max_level=level,
+        )
+
+    def _finish(self, ended_at: datetime) -> None:
+        active = self.active
+        self.active = None
+        if active is None:
+            return
+        seconds = (ended_at - active.alert_started_at).total_seconds()
+        if seconds < 0:
+            return
+        self.measurement = LastAlertMeasurement(
+            alert_started_at=active.alert_started_at,
+            ended_at=ended_at,
+            seconds=seconds,
+            max_level=active.max_level,
+        )
+
+
+@dataclass(frozen=True, slots=True)
 class AlertLatencyMeasurement:
     """One frozen end-to-end alert latency measurement."""
 
@@ -246,6 +346,10 @@ class LocationState:
     partial_level_code: str | None = None
     active_full_alert_location_uids: tuple[str, ...] = field(default_factory=tuple)
     active_partial_alert_location_uids: tuple[str, ...] = field(default_factory=tuple)
+    last_alert_started_at: datetime | None = None
+    last_alert_ended_at: datetime | None = None
+    last_alert_duration: float | None = None
+    last_alert_level: str | None = None
     latency_alert_started_at: datetime | None = None
     alert_detected_at: datetime | None = None
     alert_latency: float | None = None

@@ -47,3 +47,18 @@ def test_naive_persisted_timestamps_are_normalized_to_utc():
     assert decoded is not None
     assert decoded.alert_started_at.tzinfo is UTC
     assert decoded.detected_at.tzinfo is UTC
+
+
+def test_alert_history_roundtrip():
+    active = models.ActiveAlertLifecycle(
+        alert_started_at=datetime(2026, 9, 10, 7, 0, tzinfo=UTC),
+        max_level="red",
+    )
+    completed = models.LastAlertMeasurement(
+        alert_started_at=datetime(2026, 9, 10, 5, 0, tzinfo=UTC),
+        ended_at=datetime(2026, 9, 10, 5, 42, tzinfo=UTC),
+        seconds=2520.0,
+        max_level="red",
+    )
+    assert storage._decode_active_alert(storage._encode_active_alert(active)) == active
+    assert storage._decode_last_alert(storage._encode_last_alert(completed)) == completed

@@ -12,7 +12,7 @@ The integration uses the token-free Ubilling proxy for `alerts.in.ua` raw data:
 - Domain: `ua_alerts`
 - Integration directory: `custom_components/ua_alerts/`
 - Repository: `gamba69/home-assistant-ua-alerts`
-- Current release: **0.1.19**
+- Current release: **0.1.20**
 
 
 ## Highlights
@@ -24,7 +24,7 @@ The integration uses the token-free Ubilling proxy for `alerts.in.ua` raw data:
 - domain-wide configurable polling/stale timing (defaults: 3 s / 15 s);
 - air-raid level derived only from the source `alert_level` field;
 - administrative alert inheritance: oblast -> raion -> hromada, with no false upward propagation;
-- threat aggregation/de-duplication plus end-to-end alert and threat latency diagnostics;
+- threat aggregation/de-duplication plus persistent last-alert state and end-to-end delay measurements;
 - RU / UK / EN translations;
 - no API token required;
 - HACS-ready repository layout.
@@ -68,7 +68,7 @@ Once this repository contains the integration files, add it to HACS as a custom 
 
 ## Entities
 
-Seven entities are enabled by default for a configured hromada or standalone city. Raion and oblast entries get an eighth operational entity, `alert_coverage`, because those territories can be only partially active. Entity IDs use only the stable alerts.in.ua territory UID and a short technical suffix, so they do not contain a transliterated territory name. For example, Kyiv uses `sensor.ua_31_level`, while Kaharlyk hromada uses `sensor.ua_726_level`. Internal Home Assistant `unique_id` values remain unchanged for registry continuity. On upgrade, untouched automatically generated legacy entity IDs are shortened automatically; this also covers old IDs restored by Home Assistant after a territory is removed and re-added. Manually renamed entity IDs are preserved.
+Nine entities are enabled by default for a configured hromada or standalone city. Raion and oblast entries get a tenth operational entity, `alert_coverage`, because those territories can be only partially active. Entity IDs use only the stable alerts.in.ua territory UID and a short technical suffix, so they do not contain a transliterated territory name. For example, Kyiv uses `sensor.ua_31_level`, while Kaharlyk hromada uses `sensor.ua_726_level`. Internal Home Assistant `unique_id` values remain stable after the one-time 0.1.20 latency-to-delay migration. On upgrade, untouched automatically generated legacy entity IDs are shortened automatically; this also covers old IDs restored by Home Assistant after a territory is removed and re-added. Manually renamed entity IDs are preserved.
 
 | Entity | Purpose |
 | --- | --- |
@@ -77,21 +77,23 @@ Seven entities are enabled by default for a configured hromada or standalone cit
 | `binary_sensor.ua_<uid>_alert` | on for yellow/red, off for clear |
 | `sensor.ua_<uid>_threats` | localized threat names; raw English codes are exposed as attributes |
 | `binary_sensor.ua_<uid>_source` | source freshness/availability |
-| `sensor.ua_<uid>_alert_latency` | end-to-end delay from source `Alert.started_at` to the first snapshot in which HA observes the new alert |
-| `sensor.ua_<uid>_threat_latency` | end-to-end delay from the latest newly appeared `Threat.started_at` to the first snapshot in which HA observes that threat |
+| `sensor.ua_<uid>_last_alert_duration` | duration of the latest fully observed completed alert |
+| `sensor.ua_<uid>_last_alert_level` | maximum level reached by the latest fully observed completed alert |
+| `sensor.ua_<uid>_last_alert_delay` | end-to-end delay from source `Alert.started_at` to the first snapshot in which HA observes the new alert |
+| `sensor.ua_<uid>_last_threat_delay` | end-to-end delay from the latest newly appeared `Threat.started_at` to the first snapshot in which HA observes that threat |
 | `sensor.ua_<uid>_health` | aggregate data status: normal / delayed / source error / data error |
 
-`alert_latency` is measured only on a valid `clear -> yellow/red` transition and then frozen. It does not grow while the same alert remains active. If Home Assistant starts while an alert is already active, no alert latency is fabricated; the integration waits for a later clear state and the next alert.
+`last_alert_delay` is measured only on a valid `clear -> yellow/red` transition and then frozen. It does not grow while the same alert remains active. If Home Assistant starts while an alert is already active, no alert latency is fabricated; the integration waits for a later clear state and the next alert.
 
-`threat_latency` is measured for each newly appearing threat instance as `Threat.started_at -> first HA snapshot containing that threat`. The sensor exposes the **latest measured threat latency**. Existing threats present when Home Assistant starts establish the baseline and are not misreported as huge latency values; a threat that appears later during the same active alert is measured normally. A level-only change of the same threat (`threat_type` + same `started_at`) does not create a fake new measurement. If several new threats arrive in one snapshot, the threat with the latest `started_at` becomes the displayed measurement. Both latency sensors keep their last valid values after the alert clears **and are persisted per territory UID**, so their values and measurement attributes are restored after a Home Assistant restart. Restored values do not establish a fake alert/threat transition: startup during an already-active alert still only establishes the live baseline.
+`last_threat_delay` is measured for each newly appearing threat instance as `Threat.started_at -> first HA snapshot containing that threat`. The sensor exposes the **latest measured threat latency**. Existing threats present when Home Assistant starts establish the baseline and are not misreported as huge latency values; a threat that appears later during the same active alert is measured normally. A level-only change of the same threat (`threat_type` + same `started_at`) does not create a fake new measurement. If several new threats arrive in one snapshot, the threat with the latest `started_at` becomes the displayed measurement. Both delay sensors keep their last valid values after the alert clears **and are persisted per territory UID**, so their values and measurement attributes are restored after a Home Assistant restart. Restored values do not establish a fake alert/threat transition: startup during an already-active alert still only establishes the live baseline.
 
 `data_health` is the at-a-glance diagnostic entity. It remains available even when operational entities do not. Its state is `normal`, `delayed`, `source_error`, or `data_error`, localized by Home Assistant. It exposes the last alert latency, last threat latency, sampled source response time, consecutive poll error count, HTTP status, last error, and a technical delay reason. To avoid recreating the old 3-second diagnostic noise, volatile details are sampled at most every 30 seconds unless the health state/reason, error, or measured latency changes. **Alert/threat end-to-end latency is informational and never marks data health as delayed**, because the integration cannot distinguish upstream publication delay from normal source behavior. `delayed` is reserved for a slow HTTP response from the configured source (1.5 s or slower).
 
-The threat-latency attributes expose the stable technical threat code, threat level code, source start time, HA detection time, and source message.
+The last-threat-delay attributes expose the stable technical threat code, threat level code, source start time, HA detection time, and source message.
 
 Upgrades from <= 0.1.4 automatically remove the old high-churn diagnostic entities (`received_at`, `data_age`, and the three previous latency variants), so they no longer spam Home Assistant history/activity.
 
-The integration explicitly suggests the short UID-based object IDs above; registry `unique_id` values remain stable and continue to contain the location UID.
+The integration explicitly suggests the short UID-based object IDs above; registry `unique_id` values remain stable after the 0.1.20 migration and continue to contain the location UID.
 
 ### Stable machine-readable values
 

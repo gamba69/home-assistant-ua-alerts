@@ -1138,11 +1138,21 @@
           "tactic_aircraft_activity_and_strategic_aircraft_activity_and_mig31k_departure_and_ballistic_missiles_and_cruise_missiles_and_unspecified_missiles_and_drones_and_guided_aerial_bombs_and_air_defense_and_unknown": "Tactical aviation, Strategic aviation, MiG-31K takeoff, Ballistic missiles, Cruise missiles, Missile threat, UAVs, Guided aerial bombs, Air defence activity, Unknown threat"
         }
       },
-      "alert_latency": {
-        "name": "Alert latency"
+      "last_alert_duration": {
+        "name": "Last alert duration"
       },
-      "threat_latency": {
-        "name": "Threat latency"
+      "last_alert_level": {
+        "name": "Last alert level",
+        "state": {
+          "yellow": "Yellow",
+          "red": "Red"
+        }
+      },
+      "last_alert_delay": {
+        "name": "Last alert delay"
+      },
+      "last_threat_delay": {
+        "name": "Last threat delay"
       },
       "data_health": {
         "name": "Data status",
