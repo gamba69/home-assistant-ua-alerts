@@ -12,7 +12,7 @@ UA Alerts — пользовательская интеграция Home Assista
 - Domain: `ua_alerts`
 - Каталог интеграции: `custom_components/ua_alerts/`
 - Репозиторий: `gamba69/home-assistant-ua-alerts`
-- Текущий релиз: **0.1.23**
+- Текущий релиз: **0.1.24**
 
 ## Основные возможности
 

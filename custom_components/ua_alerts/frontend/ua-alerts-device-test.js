@@ -323,7 +323,7 @@ function addTestDeviceAction(page) {
     href: undefined,
     target: undefined,
     trailingIcon: undefined,
-    label: stringsFor(hass).action,
+    label: `${stringsFor(hass).action} · ${territoryTitle}`,
     action: () => openTestDialog(hass, entryId, territoryTitle),
   };
 

@@ -12,7 +12,7 @@ The integration uses the token-free Ubilling proxy for `alerts.in.ua` raw data:
 - Domain: `ua_alerts`
 - Integration directory: `custom_components/ua_alerts/`
 - Repository: `gamba69/home-assistant-ua-alerts`
-- Current release: **0.1.23**
+- Current release: **0.1.24**
 
 
 ## Highlights

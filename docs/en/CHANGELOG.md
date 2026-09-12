@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.24
+- Fixed territory visibility on the Home Assistant device page: the guaranteed-visible test action now includes the configured territory, for example `Test alert · м. Київ`.
+- Expanded the repository landing README to document the current territory model, entities, global timing controls, test mode, Last Alert history/lag, events, installation, diagnostics, and reliability semantics.
+- Synchronized release metadata and localized documentation with 0.1.24.
+
 ## 0.1.23
 - Added the configured territory directly to the device service-card configuration row, so the entry is immediately identifiable (for example `UA Alerts · м. Київ`).
 - Renamed `Last alert delay` / `Last threat delay` to `Last alert lag` / `Last threat lag`, including entity keys/IDs and event aliases, with safe registry migration from both older latency names and 0.1.20–0.1.22 delay names.
