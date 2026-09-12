@@ -153,7 +153,11 @@ def _async_migrate_default_entity_ids(hass: HomeAssistant, entry: ConfigEntry) -
             )
 
 
-PLATFORMS: tuple[Platform, ...] = (Platform.SENSOR, Platform.BINARY_SENSOR)
+PLATFORMS: tuple[Platform, ...] = (
+    Platform.SENSOR,
+    Platform.BINARY_SENSOR,
+    Platform.NUMBER,
+)
 
 
 @dataclass(slots=True)

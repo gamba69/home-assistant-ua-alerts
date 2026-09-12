@@ -22,7 +22,7 @@ from homeassistant.helpers import entity_registry as er
 from homeassistant.setup import async_setup_component
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 
-from custom_components.ua_alerts.const import DOMAIN, SOURCE_URL, VERSION
+from custom_components.ua_alerts.const import DOMAIN, VERSION
 from custom_components.ua_alerts.diagnostics import async_get_config_entry_diagnostics
 from custom_components.ua_alerts.models import LocationDefinition
 
@@ -200,18 +200,24 @@ async def test_entity_contract_and_states(hass: HomeAssistant):
 
     registry = er.async_get(hass)
     entries = er.async_entries_for_config_entry(registry, config_entry.entry_id)
-    assert len(entries) == 9
+    assert len(entries) == 11
     enabled = [item for item in entries if not item.disabled]
-    assert len(enabled) == 9
+    assert len(enabled) == 11
 
     alert_id = registry.async_get_entity_id("sensor", DOMAIN, "ua_alerts_31_alert_level")
     threats_id = registry.async_get_entity_id("sensor", DOMAIN, "ua_alerts_31_threat_codes")
     air_id = registry.async_get_entity_id("binary_sensor", DOMAIN, "ua_alerts_31_air_alert")
     source_id = registry.async_get_entity_id("binary_sensor", DOMAIN, "ua_alerts_31_source_available")
+    poll_id = registry.async_get_entity_id("number", DOMAIN, "ua_alerts_31_poll_interval")
+    stale_id = registry.async_get_entity_id("number", DOMAIN, "ua_alerts_31_stale_after")
     assert alert_id == "sensor.ua_31_level"
     assert threats_id == "sensor.ua_31_threats"
     assert air_id == "binary_sensor.ua_31_alert"
     assert source_id == "binary_sensor.ua_31_source"
+    assert poll_id == "number.ua_31_poll"
+    assert stale_id == "number.ua_31_stale"
+    assert float(hass.states.get(poll_id).state) == 3.0
+    assert float(hass.states.get(stale_id).state) == 15.0
     assert registry.async_get_entity_id(
         "sensor", DOMAIN, "ua_alerts_31_last_alert_duration"
     ) == "sensor.ua_31_last_alert_duration"
@@ -249,7 +255,10 @@ async def test_entity_contract_and_states(hass: HomeAssistant):
     assert device.entry_type is dr.DeviceEntryType.SERVICE
     assert device.manufacturer == "UA Alerts"
     assert device.sw_version == VERSION
-    assert device.configuration_url == SOURCE_URL
+    assert device.configuration_url == (
+        f"homeassistant://config/integrations/integration/{DOMAIN}"
+        f"#config_entry={config_entry.entry_id}"
+    )
     assert device.model is None
 
     assert await hass.config_entries.async_unload(config_entry.entry_id)
@@ -605,6 +614,126 @@ async def test_global_timing_options_update_live_runtime_and_all_entries(hass: H
     await hass.config_entries.async_unload(first.entry_id)
 
 
+async def test_global_timing_number_entities_sync_every_territory(
+    hass: HomeAssistant,
+):
+    session = FakeSession([payload("red")])
+    first = entry()
+    second = entry("14", "Київська область", "oblast")
+    await setup_with_session(hass, first, session)
+    await setup_with_session(hass, second, session)
+
+    assert float(hass.states["number.ua_31_poll"].state) == 3.0
+    assert float(hass.states["number.ua_14_poll"].state) == 3.0
+    assert float(hass.states["number.ua_31_stale"].state) == 15.0
+    assert float(hass.states["number.ua_14_stale"].state) == 15.0
+
+    await hass.services.async_call(
+        "number",
+        "set_value",
+        {"entity_id": "number.ua_31_poll", "value": 5},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    assert first.runtime_data.runtime.poll_interval == 5
+    assert float(hass.states["number.ua_31_poll"].state) == 5.0
+    assert float(hass.states["number.ua_14_poll"].state) == 5.0
+    assert first.options["poll_interval"] == 5
+    assert second.options["poll_interval"] == 5
+
+    await hass.services.async_call(
+        "number",
+        "set_value",
+        {"entity_id": "number.ua_14_stale", "value": 20},
+        blocking=True,
+    )
+    await hass.async_block_till_done()
+    assert first.runtime_data.runtime.stale_after == 20
+    assert float(hass.states["number.ua_31_stale"].state) == 20.0
+    assert float(hass.states["number.ua_14_stale"].state) == 20.0
+    assert first.options["stale_after"] == 20
+    assert second.options["stale_after"] == 20
+
+    await hass.config_entries.async_unload(first.entry_id)
+    await hass.config_entries.async_unload(second.entry_id)
+
+
+async def test_territory_test_override_supports_multiple_threats_without_history(
+    hass: HomeAssistant,
+):
+    session = FakeSession([{"raw": [], "cachedat": "2026-09-09 15:00:10"}])
+    config_entry = entry()
+    await setup_with_session(hass, config_entry, session)
+
+    level_events = []
+    threat_events = []
+    hass.bus.async_listen(
+        "ua_alert_level_changed",
+        lambda event: level_events.append(event.data),
+    )
+    hass.bus.async_listen(
+        "ua_alert_threats_changed",
+        lambda event: threat_events.append(event.data),
+    )
+
+    result = await hass.config_entries.options.async_init(config_entry.entry_id)
+    assert result["type"] is FlowResultType.MENU
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "testing"}
+    )
+    assert result["type"] is FlowResultType.FORM
+    assert result["step_id"] == "testing"
+    assert "location_uid" not in result["data_schema"].schema
+
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {
+            "test_level": "red",
+            "test_threats": ["drones", "cruise_missiles"],
+        },
+    )
+    assert result["type"] is FlowResultType.ABORT
+    await hass.async_block_till_done()
+
+    assert hass.states["sensor.ua_31_level"].state == "red"
+    assert hass.states["binary_sensor.ua_31_alert"].state == "on"
+    assert (
+        hass.states["sensor.ua_31_threats"].state
+        == "cruise_missiles_and_drones"
+    )
+    assert hass.states["sensor.ua_31_threats"].attributes["threat_codes"] == [
+        "cruise_missiles",
+        "drones",
+    ]
+    assert hass.states["sensor.ua_31_level"].attributes["test_override"] is True
+    assert hass.states["sensor.ua_31_threats"].attributes["test_override"] is True
+    assert hass.states["sensor.ua_31_last_alert_duration"].state == "unavailable"
+    assert hass.states["sensor.ua_31_last_alert_level"].state == "unavailable"
+    assert level_events[-1]["new_level"] == "red"
+    assert level_events[-1]["test_override"] is True
+    assert threat_events[-1]["threat_codes"] == "cruise_missiles,drones"
+    assert threat_events[-1]["test_override"] is True
+
+    result = await hass.config_entries.options.async_init(config_entry.entry_id)
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"], {"next_step_id": "testing"}
+    )
+    result = await hass.config_entries.options.async_configure(
+        result["flow_id"],
+        {"test_level": "off", "test_threats": []},
+    )
+    assert result["type"] is FlowResultType.ABORT
+    await hass.async_block_till_done()
+
+    assert hass.states["sensor.ua_31_level"].state == "clear"
+    assert hass.states["binary_sensor.ua_31_alert"].state == "off"
+    assert hass.states["sensor.ua_31_threats"].state == "none"
+    assert hass.states["sensor.ua_31_last_alert_duration"].state == "unavailable"
+    assert hass.states["sensor.ua_31_last_alert_level"].state == "unavailable"
+
+    await hass.config_entries.async_unload(config_entry.entry_id)
+
+
 async def test_last_alert_duration_and_maximum_level(hass: HomeAssistant):
     session = FakeSession([{"raw": [], "cachedat": "2026-09-09 15:00:10"}])
     config_entry = entry()
@@ -816,7 +945,7 @@ async def test_raion_partial_alert_has_coverage_sensor_and_raw_code_lists(
 
     registry = er.async_get(hass)
     entries = er.async_entries_for_config_entry(registry, config_entry.entry_id)
-    assert len(entries) == 10
+    assert len(entries) == 12
 
     alert_id = registry.async_get_entity_id(
         "sensor", DOMAIN, "ua_alerts_76_alert_level"

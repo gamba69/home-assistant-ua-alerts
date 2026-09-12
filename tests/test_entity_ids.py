@@ -19,6 +19,8 @@ def test_short_entity_ids():
         "data_health": "sensor.ua_31_health",
         "air_alert": "binary_sensor.ua_31_alert",
         "source_available": "binary_sensor.ua_31_source",
+        "poll_interval": "number.ua_31_poll",
+        "stale_after": "number.ua_31_stale",
     }
     for key, entity_id in expected.items():
         assert entity_ids.short_entity_id("31", key) == entity_id

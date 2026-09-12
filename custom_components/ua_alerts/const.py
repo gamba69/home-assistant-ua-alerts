@@ -4,7 +4,7 @@ from __future__ import annotations
 
 DOMAIN = "ua_alerts"
 NAME = "UA Alerts"
-VERSION = "0.1.20"
+VERSION = "0.1.21"
 
 SOURCE_URL = "https://ubilling.net.ua/aerialalerts/?source=aiu&raw"
 DEFAULT_POLL_INTERVAL_SECONDS = 3.0
@@ -111,6 +111,7 @@ ATTR_THREAT_STARTED_AT = "threat_started_at"
 ATTR_THREAT_DETECTED_AT = "threat_detected_at"
 ATTR_THREAT_LATENCY = "threat_latency"
 ATTR_LAST_THREAT_DELAY = "last_threat_delay"
+ATTR_TEST_OVERRIDE = "test_override"
 ATTR_THREAT_SOURCE_MESSAGE = "threat_source_message"
 ATTR_SOURCE_UPDATED_AT = "source_updated_at"
 ATTR_RECEIVED_AT = "received_at"

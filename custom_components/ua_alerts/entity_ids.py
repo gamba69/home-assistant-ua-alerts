@@ -15,6 +15,8 @@ ENTITY_ID_SPECS: dict[str, tuple[str, str]] = {
     "data_health": ("sensor", "health"),
     "air_alert": ("binary_sensor", "alert"),
     "source_available": ("binary_sensor", "source"),
+    "poll_interval": ("number", "poll"),
+    "stale_after": ("number", "stale"),
 }
 
 

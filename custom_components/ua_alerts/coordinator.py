@@ -13,6 +13,11 @@ from homeassistant.core import HomeAssistant
 from homeassistant.helpers.update_coordinator import DataUpdateCoordinator
 
 from .const import (
+    ALERT_COVERAGE_FULL,
+    ALERT_COVERAGE_NONE,
+    ALERT_LEVEL_CLEAR,
+    ALERT_LEVEL_RED,
+    ALERT_LEVEL_YELLOW,
     ATTR_ACTIVE_ALERT_LOCATION_UIDS,
     ATTR_ACTIVE_FULL_ALERT_LOCATION_UIDS,
     ATTR_ACTIVE_PARTIAL_ALERT_LOCATION_UIDS,
@@ -31,6 +36,7 @@ from .const import (
     ATTR_LAST_ALERT_LEVEL,
     ATTR_LAST_ALERT_STARTED_AT,
     ATTR_LAST_THREAT_DELAY,
+    ATTR_TEST_OVERRIDE,
     ATTR_PARTIAL_LEVEL_CODE,
     ATTR_LOCATION_UID,
     ATTR_NEW_LEVEL,
@@ -60,12 +66,24 @@ from .models import (
     AlertLatencyTracker,
     LocationDefinition,
     LocationState,
+    Threat,
     ThreatLatencyTracker,
     evaluate_location,
 )
+from .display import THREAT_CODE_ORDER
 from .runtime import UAAlertsRuntime
 
 _LOGGER = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True, slots=True)
+class _TestOverride:
+    """Temporary user-facing alert state used for automation testing."""
+
+    level: str
+    threat_codes: tuple[str, ...]
+    started_at: datetime
+
 
 @dataclass(frozen=True, slots=True)
 class _HealthDetails:
@@ -122,6 +140,8 @@ class UAAlertsCoordinator(DataUpdateCoordinator[LocationState]):
             update_interval=None,
         )
         self.data = initial
+        self._real_state = initial
+        self._test_override: _TestOverride | None = None
 
         self._started = False
         self._has_valid_baseline = False
@@ -177,7 +197,7 @@ class UAAlertsCoordinator(DataUpdateCoordinator[LocationState]):
         return is_last
 
     def _handle_runtime_update(self) -> None:
-        state = evaluate_location(
+        real_state = evaluate_location(
             self.runtime.parsed_snapshot,
             location_uid=self.location_uid,
             location_title=self.location_title,
@@ -187,9 +207,10 @@ class UAAlertsCoordinator(DataUpdateCoordinator[LocationState]):
             location_definition=self.location_definition,
             descendant_definitions=self.descendant_definitions,
         )
-        state = self._process_snapshot_and_events(state)
-        state = self._state_with_health(state)
-        self.async_set_updated_data(state)
+        real_state = self._process_snapshot_and_events(real_state)
+        real_state = self._state_with_health(real_state)
+        self._real_state = real_state
+        self.async_set_updated_data(self._state_with_test_override(real_state))
 
     def _state_with_last_latencies(self, state: LocationState) -> LocationState:
         """Attach the last completed alert and threat latency measurements."""
@@ -314,6 +335,14 @@ class UAAlertsCoordinator(DataUpdateCoordinator[LocationState]):
             self._schedule_latency_save()
         state = self._state_with_last_latencies(state)
 
+        if self._test_override is None:
+            self._process_effective_events(state)
+        return state
+
+    def _process_effective_events(self, state: LocationState) -> None:
+        """Emit transitions for the state currently exposed to Home Assistant."""
+        if state.level is None:
+            return
         threat_signature = tuple(threat.dedupe_key for threat in state.threats)
         if self._has_valid_baseline:
             if state.level != self._last_valid_level:
@@ -335,7 +364,121 @@ class UAAlertsCoordinator(DataUpdateCoordinator[LocationState]):
 
         self._last_valid_level = state.level
         self._last_valid_threat_signature = threat_signature
-        return state
+
+    @property
+    def test_override_level(self) -> str | None:
+        """Return the active test level, or None when live data is exposed."""
+        return self._test_override.level if self._test_override is not None else None
+
+    @property
+    def test_override_threat_codes(self) -> tuple[str, ...]:
+        """Return currently selected test threats."""
+        if self._test_override is None:
+            return ()
+        return self._test_override.threat_codes
+
+    def set_test_override(self, level: str, threat_codes: tuple[str, ...]) -> None:
+        """Expose a temporary alert state without touching real history."""
+        if level not in {ALERT_LEVEL_CLEAR, ALERT_LEVEL_YELLOW, ALERT_LEVEL_RED}:
+            raise ValueError(f"Unsupported test alert level: {level}")
+
+        requested = set(threat_codes)
+        unknown = requested.difference(THREAT_CODE_ORDER)
+        if unknown:
+            raise ValueError(f"Unsupported test threat codes: {sorted(unknown)}")
+        normalized = tuple(code for code in THREAT_CODE_ORDER if code in requested)
+        if level == ALERT_LEVEL_CLEAR:
+            normalized = ()
+
+        if not self._has_valid_baseline:
+            self._has_valid_baseline = True
+            self._last_valid_level = self._real_state.level or ALERT_LEVEL_CLEAR
+            self._last_valid_threat_signature = tuple(
+                threat.dedupe_key for threat in self._real_state.threats
+            )
+
+        started_at = (
+            self._test_override.started_at
+            if self._test_override is not None
+            else self.runtime.now()
+        )
+        self._test_override = _TestOverride(
+            level=level,
+            threat_codes=normalized,
+            started_at=started_at,
+        )
+        state = self._state_with_test_override(self._real_state)
+        self._process_effective_events(state)
+        self.async_set_updated_data(state)
+
+    def clear_test_override(self) -> None:
+        """Return immediately to the latest real source state."""
+        if self._test_override is None:
+            return
+        self._test_override = None
+        self._process_effective_events(self._real_state)
+        self.async_set_updated_data(self._real_state)
+
+    def _state_with_test_override(self, state: LocationState) -> LocationState:
+        """Overlay the temporary test state after real tracking is complete."""
+        override = self._test_override
+        if override is None:
+            return state
+
+        now = self.runtime.now()
+        if override.level == ALERT_LEVEL_CLEAR:
+            return replace(
+                state,
+                data_valid=True,
+                data_error=None,
+                level=ALERT_LEVEL_CLEAR,
+                test_override_active=True,
+                threats=(),
+                threat_codes=(),
+                alert_started_at=None,
+                alert_scope=None,
+                alert_source_location_uid=None,
+                alert_source_location_title=None,
+                alert_source_location_type=None,
+                active_alert_location_uids=(),
+                coverage_code=ALERT_COVERAGE_NONE,
+                full_level_code=ALERT_LEVEL_CLEAR,
+                partial_level_code=ALERT_LEVEL_CLEAR,
+                active_full_alert_location_uids=(),
+                active_partial_alert_location_uids=(),
+                received_at=now,
+            )
+
+        threats = tuple(
+            Threat(
+                threat_type=code,
+                level=override.level,
+                started_at=override.started_at,
+                source_message=None,
+            )
+            for code in override.threat_codes
+        )
+        return replace(
+            state,
+            data_valid=True,
+            data_error=None,
+            level=override.level,
+            test_override_active=True,
+            threats=threats,
+            threat_codes=override.threat_codes,
+            alert_started_at=override.started_at,
+            alert_scope="direct",
+            alert_source_location_uid=self.location_uid,
+            alert_source_location_title=self.location_title,
+            alert_source_location_type=self.location_type,
+            active_alert_location_uids=(self.location_uid,),
+            coverage_code=ALERT_COVERAGE_FULL,
+            full_level_code=override.level,
+            partial_level_code=ALERT_LEVEL_CLEAR,
+            active_full_alert_location_uids=(self.location_uid,),
+            active_partial_alert_location_uids=(),
+            received_at=now,
+        )
 
 
     def _schedule_latency_save(self) -> None:
@@ -411,5 +554,6 @@ class UAAlertsCoordinator(DataUpdateCoordinator[LocationState]):
             ATTR_LAST_THREAT_DELAY: state.threat_latency,
             ATTR_SOURCE_UPDATED_AT: state.source_updated_at,
             ATTR_RECEIVED_AT: state.received_at,
+            ATTR_TEST_OVERRIDE: state.test_override_active,
         }
         self.hass.bus.async_fire(event_type, payload)

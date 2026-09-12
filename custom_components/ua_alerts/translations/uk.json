@@ -91,6 +91,14 @@
     }
   },
   "entity": {
+    "number": {
+      "poll_interval": {
+        "name": "Інтервал опитування"
+      },
+      "stale_after": {
+        "name": "Поріг застарівання"
+      }
+    },
     "sensor": {
       "alert_level": {
         "name": "Рівень тривоги",
@@ -1179,12 +1187,22 @@
         "title": "Налаштування UA Alerts",
         "description": "Polling: {polling} с · stale: {stale} с · довідник: {catalog_count} територій.",
         "menu_options": {
+          "testing": "Тестування",
           "timing": "Polling і stale",
           "refresh_catalog": "Оновити довідник територій"
         },
         "menu_option_descriptions": {
+          "testing": "Тимчасово підмінити стан цієї території для перевірки автоматизацій Home Assistant.",
           "timing": "Налаштувати спільний інтервал опитування джерела та поріг застарівання даних.",
           "refresh_catalog": "Завантажити свіжий довідник зараз. Автоматично довідник не оновлюється."
+        }
+      },
+      "testing": {
+        "title": "Тест тривоги",
+        "description": "{location}. Тимчасова тестова підміна. Реальне джерело продовжує опитуватися, а Last Alert і затримки не змінюються. Виберіть «Вимкнено», щоб повернутися до реальних даних.",
+        "data": {
+          "test_level": "Рівень тривоги",
+          "test_threats": "Загрози"
         }
       },
       "timing": {
@@ -1203,9 +1221,11 @@
     "error": {
       "stale_too_short": "Stale має бути не менше подвійного polling.",
       "invalid_timing": "Перевірте значення polling і stale.",
+      "invalid_test": "Перевірте рівень тестової тривоги та вибрані загрози.",
       "catalog_refresh_failed": "Не вдалося оновити довідник територій. Перевірте з’єднання та повторіть."
     },
     "abort": {
+      "test_updated": "Тестовий стан оновлено для {location}.",
       "catalog_refreshed": "Довідник територій оновлено: {catalog_count} записів."
     }
   },

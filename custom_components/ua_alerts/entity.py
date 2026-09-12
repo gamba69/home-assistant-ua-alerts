@@ -5,7 +5,7 @@ from __future__ import annotations
 from homeassistant.helpers.device_registry import DeviceEntryType, DeviceInfo
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
-from .const import DOMAIN, SOURCE_URL, VERSION
+from .const import DOMAIN, VERSION
 from .coordinator import UAAlertsCoordinator
 from .entity_ids import short_object_id
 
@@ -37,7 +37,10 @@ class UAAlertsEntity(CoordinatorEntity[UAAlertsCoordinator]):
             translation_placeholders=None,
             manufacturer="UA Alerts",
             sw_version=VERSION,
-            configuration_url=SOURCE_URL,
+            configuration_url=(
+                f"homeassistant://config/integrations/integration/{DOMAIN}"
+                f"#config_entry={coordinator.entry.entry_id}"
+            ),
             # Explicitly clear legacy metadata from previous builds.
             model=None,
             model_id=None,

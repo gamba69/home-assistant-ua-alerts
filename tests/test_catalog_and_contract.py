@@ -57,6 +57,7 @@ def test_location_catalog_has_unique_uids_and_required_examples():
 def test_exact_entity_contract_no_extras():
     sensor_source = (INTEGRATION / "sensor.py").read_text(encoding="utf-8")
     binary_source = (INTEGRATION / "binary_sensor.py").read_text(encoding="utf-8")
+    number_source = (INTEGRATION / "number.py").read_text(encoding="utf-8")
     for key in ("alert_level", "alert_coverage", "threat_codes", "last_alert_duration", "last_alert_level", "last_alert_delay", "last_threat_delay", "data_health"):
         assert f'key="{key}"' in sensor_source
     for removed in (
@@ -68,13 +69,16 @@ def test_exact_entity_contract_no_extras():
     for key in ("air_alert", "source_available"):
         assert f'key="{key}"' in binary_source
     assert len(re.findall(r'UAAlertsBinarySensorDescription\(\s*key="', binary_source)) == 2
+    assert "key=OPT_POLL_INTERVAL" in number_source
+    assert "key=OPT_STALE_AFTER" in number_source
+    assert len(re.findall(r"NumberEntityDescription\(", number_source)) == 2
 
 
 def test_three_translation_catalogues_have_same_top_level_sections():
     docs = [json.loads((INTEGRATION / "translations" / f"{lang}.json").read_text(encoding="utf-8")) for lang in ("en", "ru", "uk")]
     for data in docs:
         assert set(data) == {"title", "config", "entity", "options", "selector"}
-        assert set(data["entity"]) == {"sensor", "binary_sensor"}
+        assert set(data["entity"]) == {"number", "sensor", "binary_sensor"}
 
 
 def test_hacs_targets_current_home_assistant_series():
@@ -133,9 +137,10 @@ def test_translation_catalogues_include_hierarchical_flow_and_global_options():
         assert {"user", "search", "search_results", "tree", "scope", "raion", "hromada", "fallback"}.issubset(steps)
         assert set(data["selector"]["territory_scope"]["options"]) == {"oblast", "raion", "hromada"}
         option_steps = data["options"]["step"]
-        assert {"init", "timing", "refresh_catalog_failed"}.issubset(option_steps)
+        assert {"init", "testing", "timing", "refresh_catalog_failed"}.issubset(option_steps)
+        assert set(option_steps["testing"]["data"]) == {"test_level", "test_threats"}
         assert set(option_steps["timing"]["data"]) == {"poll_interval", "stale_after"}
-        assert set(option_steps["init"]["menu_options"]) == {"timing", "refresh_catalog"}
+        assert set(option_steps["init"]["menu_options"]) == {"testing", "timing", "refresh_catalog"}
 
 
 def test_config_flow_uses_hierarchy_and_domain_wide_options():
@@ -148,7 +153,9 @@ def test_config_flow_uses_hierarchy_and_domain_wide_options():
     assert "async_step_hromada" in source
     assert 'translation_key="territory_scope"' in source
     assert "async_get_options_flow" in source
-    assert "runtime.async_update_timing" in source
+    assert "async_step_testing" in source
+    assert "multiple=True" in source
+    assert "async_apply_settings" in source
 
 
 def test_catalog_refresh_is_not_part_of_alert_polling_runtime():
@@ -192,7 +199,8 @@ def test_device_name_is_raw_catalog_title_and_service_metadata_is_useful():
     assert "entry_type=DeviceEntryType.SERVICE" in source
     assert 'manufacturer="UA Alerts"' in source
     assert "sw_version=VERSION" in source
-    assert "configuration_url=SOURCE_URL" in source
+    assert "homeassistant://config/integrations/integration/{DOMAIN}" in source
+    assert "#config_entry={coordinator.entry.entry_id}" in source
     assert "model=None" in source
     assert "model_id=None" in source
     assert "hw_version=None" in source
@@ -218,7 +226,7 @@ def test_catalog_refresh_is_explicit_in_both_setup_and_options():
     assert "async_step_catalog_setup" in source
     assert "async_step_refresh_catalog_setup" in source
     assert "async_step_refresh_catalog" in source
-    assert 'menu_options=["timing", "refresh_catalog"]' in source
+    assert 'menu_options=["testing", "timing", "refresh_catalog"]' in source
 
 
 def test_last_alert_state_sensor_contract():
@@ -338,6 +346,8 @@ def test_short_entity_id_contract_and_unique_ids_stay_stable():
         "data_health": "health",
         "air_alert": "alert",
         "source_available": "source",
+        "poll_interval": "poll",
+        "stale_after": "stale",
     }.items():
         assert f'"{key}":' in ids_source
         assert f'"{suffix}"' in ids_source

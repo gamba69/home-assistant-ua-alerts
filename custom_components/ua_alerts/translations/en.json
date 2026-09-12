@@ -91,6 +91,14 @@
     }
   },
   "entity": {
+    "number": {
+      "poll_interval": {
+        "name": "Poll interval"
+      },
+      "stale_after": {
+        "name": "Stale after"
+      }
+    },
     "sensor": {
       "alert_level": {
         "name": "Alert level",
@@ -1179,12 +1187,22 @@
         "title": "UA Alerts settings",
         "description": "Polling: {polling} s · stale: {stale} s · territory catalog: {catalog_count} entries.",
         "menu_options": {
+          "testing": "Testing",
           "timing": "Polling and stale",
           "refresh_catalog": "Refresh territory catalog"
         },
         "menu_option_descriptions": {
+          "testing": "Temporarily override this territory to test Home Assistant automations.",
           "timing": "Change the shared source polling interval and stale-data threshold.",
           "refresh_catalog": "Download the catalog now. The catalog is never refreshed automatically."
+        }
+      },
+      "testing": {
+        "title": "Test alert",
+        "description": "{location}. Temporary test override. Real polling continues and Last Alert / delay history is not changed. Choose Off to return to live data.",
+        "data": {
+          "test_level": "Alert level",
+          "test_threats": "Threats"
         }
       },
       "timing": {
@@ -1203,9 +1221,11 @@
     "error": {
       "stale_too_short": "Stale must be at least twice the polling interval.",
       "invalid_timing": "Check the polling and stale values.",
+      "invalid_test": "Check the test alert level and selected threats.",
       "catalog_refresh_failed": "Could not refresh the territory catalog. Check the connection and try again."
     },
     "abort": {
+      "test_updated": "Test state updated for {location}.",
       "catalog_refreshed": "Territory catalog updated: {catalog_count} entries."
     }
   },

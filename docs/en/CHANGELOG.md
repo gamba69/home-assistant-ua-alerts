@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.21
+- Added editable `Poll interval` and `Stale after` configuration-number entities to every territory device. The values remain domain-wide and changes from any territory are propagated live to all entries.
+- Added territory-scoped alert testing in Configure: choose `Off` / `Clear` / `Yellow` / `Red` and any combination of supported threats. The override drives the normal alert/threat entities and events while real polling and Last Alert / delay history continue independently.
+- Territory devices now link back to their exact UA Alerts Config Entry in Home Assistant, so testing opens for that territory without selecting it again.
+
 ## 0.1.20
 - Replaced the diagnostic `Alert latency` / `Threat latency` entities with ordinary state sensors `Last alert delay` and `Last threat delay`, preserving the measurements across upgrade through entity-registry migration.
 - Added `Last alert duration` and `Last alert level` (maximum yellow/red level) for the latest fully observed completed alert.

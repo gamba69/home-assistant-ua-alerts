@@ -21,7 +21,11 @@ from homeassistant.helpers.selector import (
 
 from .catalog import CatalogRefreshError, async_load_catalog, async_refresh_catalog, catalog_is_full
 from .catalog_search import location_path_label, search_catalog
+from .display import THREAT_CODE_ORDER, level_label, normalize_language, threat_label
 from .const import (
+    ALERT_LEVEL_CLEAR,
+    ALERT_LEVEL_RED,
+    ALERT_LEVEL_YELLOW,
     CONF_LOCATION_TITLE,
     CONF_LOCATION_TYPE,
     CONF_LOCATION_UID,
@@ -34,7 +38,7 @@ from .const import (
     OPT_STALE_AFTER,
 )
 from .models import LocationDefinition
-from .settings import async_get_settings, async_set_settings, validate_settings
+from .settings import async_apply_settings, async_get_settings, validate_settings
 
 _SCOPE = "scope"
 _SCOPE_OBLAST = "oblast"
@@ -44,6 +48,10 @@ _CONF_REGION_UID = "region_uid"
 _CONF_RAION_UID = "raion_uid"
 _CONF_QUERY = "query"
 _CONF_SEARCH_UID = "search_uid"
+_CONF_TEST_LEVEL = "test_level"
+_CONF_TEST_THREATS = "test_threats"
+_TEST_LEVEL_OFF = "off"
+_TEST_OFF_LABELS = {"en": "Off", "ru": "Выключено", "uk": "Вимкнено"}
 
 
 class UAAlertsConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
@@ -404,12 +412,88 @@ class UAAlertsOptionsFlow(OptionsFlow):
         catalog = await async_load_catalog(self.hass)
         return self.async_show_menu(
             step_id="init",
-            menu_options=["timing", "refresh_catalog"],
+            menu_options=["testing", "timing", "refresh_catalog"],
             description_placeholders={
                 "polling": f"{current.poll_interval:g}",
                 "stale": f"{current.stale_after:g}",
                 "catalog_count": str(len(catalog)),
             },
+        )
+
+    async def async_step_testing(
+        self, user_input: dict[str, Any] | None = None
+    ) -> ConfigFlowResult:
+        """Temporarily override one territory for automation testing."""
+        coordinator = self.config_entry.runtime_data
+        language = normalize_language(self.hass.config.language)
+        current_level = coordinator.test_override_level or _TEST_LEVEL_OFF
+        current_threats = list(coordinator.test_override_threat_codes)
+        errors: dict[str, str] = {}
+
+        if user_input is not None:
+            level = str(user_input.get(_CONF_TEST_LEVEL, _TEST_LEVEL_OFF))
+            threats = tuple(
+                str(code) for code in user_input.get(_CONF_TEST_THREATS, ())
+            )
+            try:
+                if level == _TEST_LEVEL_OFF:
+                    coordinator.clear_test_override()
+                else:
+                    coordinator.set_test_override(level, threats)
+            except ValueError:
+                errors["base"] = "invalid_test"
+            else:
+                return self.async_abort(
+                    reason="test_updated",
+                    description_placeholders={"location": coordinator.location_title},
+                )
+
+        level_options = [
+            SelectOptionDict(
+                value=_TEST_LEVEL_OFF,
+                label=_TEST_OFF_LABELS[language],
+            ),
+            *[
+                SelectOptionDict(value=code, label=level_label(code, language))
+                for code in (
+                    ALERT_LEVEL_CLEAR,
+                    ALERT_LEVEL_YELLOW,
+                    ALERT_LEVEL_RED,
+                )
+            ],
+        ]
+        threat_options = [
+            SelectOptionDict(value=code, label=threat_label(code, language))
+            for code in THREAT_CODE_ORDER
+        ]
+        return self.async_show_form(
+            step_id="testing",
+            data_schema=vol.Schema(
+                {
+                    vol.Required(
+                        _CONF_TEST_LEVEL,
+                        default=current_level,
+                    ): SelectSelector(
+                        SelectSelectorConfig(
+                            options=level_options,
+                            multiple=False,
+                            mode=SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
+                    vol.Optional(
+                        _CONF_TEST_THREATS,
+                        default=current_threats,
+                    ): SelectSelector(
+                        SelectSelectorConfig(
+                            options=threat_options,
+                            multiple=True,
+                            mode=SelectSelectorMode.DROPDOWN,
+                        )
+                    ),
+                }
+            ),
+            errors=errors,
+            description_placeholders={"location": coordinator.location_title},
         )
 
     async def async_step_timing(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
@@ -428,25 +512,11 @@ class UAAlertsOptionsFlow(OptionsFlow):
                     "stale_too_short" if "twice" in str(err) else "invalid_timing"
                 )
             else:
-                await async_set_settings(self.hass, settings)
-
-                # Keep ConfigEntry options synchronized so every entry displays
-                # the same domain-wide values. Runtime settings are still owned
-                # by the singleton, never by an individual territory.
-                for entry in self.hass.config_entries.async_entries(DOMAIN):
-                    if entry.entry_id != self.config_entry.entry_id:
-                        self.hass.config_entries.async_update_entry(
-                            entry,
-                            options=settings.as_options(),
-                        )
-
-                domain_data = self.hass.data.get(DOMAIN)
-                runtime = getattr(domain_data, "runtime", None)
-                if runtime is not None:
-                    await runtime.async_update_timing(
-                        poll_interval=settings.poll_interval,
-                        stale_after=settings.stale_after,
-                    )
+                await async_apply_settings(
+                    self.hass,
+                    settings,
+                    skip_entry_id=self.config_entry.entry_id,
+                )
                 return self.async_create_entry(data=settings.as_options())
 
         schema = vol.Schema(

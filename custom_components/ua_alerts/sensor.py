@@ -49,6 +49,7 @@ from .const import (
     ATTR_THREAT_LEVEL_CODE,
     ATTR_THREAT_SOURCE_MESSAGE,
     ATTR_THREAT_STARTED_AT,
+    ATTR_TEST_OVERRIDE,
     DATA_HEALTH_OPTIONS,
 )
 from .coordinator import UAAlertsCoordinator
@@ -195,6 +196,7 @@ class UAAlertsSensor(UAAlertsEntity, SensorEntity):
                 ATTR_ALERT_SOURCE_LOCATION_TITLE: state.alert_source_location_title,
                 ATTR_ALERT_SOURCE_LOCATION_TYPE: state.alert_source_location_type,
                 ATTR_ACTIVE_ALERT_LOCATION_UIDS: list(state.active_alert_location_uids),
+                ATTR_TEST_OVERRIDE: state.test_override_active,
             }
         if self.entity_description.key == "alert_coverage":
             return {
@@ -220,6 +222,7 @@ class UAAlertsSensor(UAAlertsEntity, SensorEntity):
                 ATTR_THREAT_CODES_CSV: state.threat_codes_state,
                 ATTR_POSSIBLE_THREAT_CODES: list(THREAT_CODE_ORDER),
                 ATTR_THREATS: [threat.as_attribute_dict() for threat in state.threats],
+                ATTR_TEST_OVERRIDE: state.test_override_active,
             }
         if self.entity_description.key in {"last_alert_duration", "last_alert_level"}:
             return {

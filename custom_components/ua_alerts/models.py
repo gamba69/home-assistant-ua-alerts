@@ -333,6 +333,7 @@ class LocationState:
     data_valid: bool
     data_error: str | None
     level: str | None
+    test_override_active: bool = False
     threats: tuple[Threat, ...] = field(default_factory=tuple)
     threat_codes: tuple[str, ...] = field(default_factory=tuple)
     alert_started_at: datetime | None = None
@@ -377,7 +378,9 @@ class LocationState:
     @property
     def operational_available(self) -> bool:
         """Return availability for alert-level, air-alert and threat-code entities."""
-        return self.source_available and self.data_valid and self.level is not None
+        return self.test_override_active or (
+            self.source_available and self.data_valid and self.level is not None
+        )
 
 
 @dataclass(frozen=True, slots=True)

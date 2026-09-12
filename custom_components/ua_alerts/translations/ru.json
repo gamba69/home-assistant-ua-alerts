@@ -91,6 +91,14 @@
     }
   },
   "entity": {
+    "number": {
+      "poll_interval": {
+        "name": "Интервал опроса"
+      },
+      "stale_after": {
+        "name": "Порог устаревания"
+      }
+    },
     "sensor": {
       "alert_level": {
         "name": "Уровень тревоги",
@@ -1179,12 +1187,22 @@
         "title": "Настройки UA Alerts",
         "description": "Polling: {polling} с · stale: {stale} с · справочник: {catalog_count} территорий.",
         "menu_options": {
+          "testing": "Тестирование",
           "timing": "Polling и stale",
           "refresh_catalog": "Обновить справочник территорий"
         },
         "menu_option_descriptions": {
+          "testing": "Временно подменить состояние этой территории для проверки автоматизаций Home Assistant.",
           "timing": "Настроить общий интервал опроса источника и порог устаревания данных.",
           "refresh_catalog": "Загрузить свежий справочник сейчас. Автоматически справочник не обновляется."
+        }
+      },
+      "testing": {
+        "title": "Тест тревоги",
+        "description": "{location}. Временная тестовая подмена. Реальный источник продолжает опрашиваться, а Last Alert и задержки не изменяются. Выберите «Выключено», чтобы вернуться к реальным данным.",
+        "data": {
+          "test_level": "Уровень тревоги",
+          "test_threats": "Угрозы"
         }
       },
       "timing": {
@@ -1203,9 +1221,11 @@
     "error": {
       "stale_too_short": "Stale должен быть не меньше удвоенного polling.",
       "invalid_timing": "Проверьте значения polling и stale.",
+      "invalid_test": "Проверьте уровень тестовой тревоги и выбранные угрозы.",
       "catalog_refresh_failed": "Не удалось обновить справочник территорий. Проверьте соединение и повторите."
     },
     "abort": {
+      "test_updated": "Тестовое состояние обновлено для {location}.",
       "catalog_refreshed": "Справочник территорий обновлён: {catalog_count} записей."
     }
   },
