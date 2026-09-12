@@ -17,10 +17,12 @@ from .catalog import async_load_catalog
 from .const import CONF_LOCATION_TITLE, CONF_LOCATION_TYPE, CONF_LOCATION_UID, DOMAIN
 from .coordinator import UAAlertsCoordinator
 from .entity_ids import ENTITY_ID_SPECS, legacy_default_entity_id, short_entity_id
+from .frontend import async_setup_frontend
 from .latency_storage import LatencyStorage, RestoredLatencyMeasurements
 from .models import LocationDefinition, descendant_locations_for
 from .runtime import UAAlertsRuntime
 from .settings import async_get_settings
+from .websocket_api import async_register_websocket_handlers
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -171,6 +173,8 @@ class UAAlertsDomainData:
 async def async_setup(hass: HomeAssistant, config: dict) -> bool:
     """Set up domain-level data."""
     hass.data.setdefault(DOMAIN, UAAlertsDomainData())
+    async_register_websocket_handlers(hass)
+    await async_setup_frontend(hass)
     return True
 
 

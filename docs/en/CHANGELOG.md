@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.22
+- Added a prominent **Test alert** action directly to every UA Alerts territory device page for administrators.
+- The action opens a compact territory-scoped dialog with alert level and multi-threat selection; the territory is taken from the device automatically.
+- The normal integration configuration link remains available in the device overflow menu. Existing test semantics are unchanged: real polling and Last Alert / delay history stay independent from the test override.
+
 ## 0.1.21
 - Added editable `Poll interval` and `Stale after` configuration-number entities to every territory device. The values remain domain-wide and changes from any territory are propagated live to all entries.
 - Added territory-scoped alert testing in Configure: choose `Off` / `Clear` / `Yellow` / `Red` and any combination of supported threats. The override drives the normal alert/threat entities and events while real polling and Last Alert / delay history continue independently.
