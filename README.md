@@ -5,7 +5,7 @@ UA Alerts is a Home Assistant custom integration for Ukrainian air alerts. It pr
 last-alert history, end-to-end lag measurements, and built-in testing of downstream
 automations.
 
-**Current release:** `0.1.24` · **Domain:** `ua_alerts`
+**Current release:** `0.1.25` · **Domain:** `ua_alerts`
 
 **English:** [Documentation](docs/en/README.md) · [Changelog](docs/en/CHANGELOG.md)
 **Русский:** [Документация](docs/ru/README.md) · [История изменений](docs/ru/CHANGELOG.md)
@@ -92,12 +92,15 @@ lists, raw internal UID lists, and test markers are not repeated on normal entit
 
 ## Testing automations from the device page
 
-Every UA Alerts territory device has a prominent administrator action whose label
-includes the territory, for example:
+Every UA Alerts territory device shows its configured territory as a separate line in
+the **Service** card, directly below **UA Alerts** and above the integration version:
 
-**Test alert · м. Київ**
+**UA Alerts**<br>
+**м. Київ**<br>
+**Version 0.1.25**
 
-Opening it brings up a compact dialog already bound to that territory. You can choose:
+The prominent **Test alert** administrator action stays short. Opening it brings up a
+compact dialog already bound to that territory. You can choose:
 
 - `Off`, `Clear`, `Yellow`, or `Red`;
 - any combination of supported threat types.

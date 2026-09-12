@@ -38,14 +38,21 @@ def test_device_page_test_dialog_contract():
     assert 'type: "ua_alerts/test/get"' in js_source
     assert 'type: "ua_alerts/test/set"' in js_source
     assert 'input type="checkbox" name="threat"' in js_source
-    assert "`${base.label || MANUFACTURER} · ${territoryTitle}`" in js_source
-    assert "`${stringsFor(hass).action} · ${territoryTitle}`" in js_source
+    assert 'label: stringsFor(hass).action' in js_source
+    assert "`${stringsFor(hass).action} · ${territoryTitle}`" not in js_source
+    assert 'customElements.whenDefined("ha-device-info-card")' in js_source
+    assert 'querySelector(".manuf")' in js_source
+    assert 'territory.className = "extra-info ua-alerts-territory"' in js_source
+    assert 'territory.textContent = device.name || ""' in js_source
+    assert 'manufacturer.insertAdjacentElement("afterend", territory)' in js_source
+    assert 'querySelector("ha-device-info-card")' in js_source
+    assert 'base.label.endsWith(territorySuffix)' in js_source
     assert "page._deviceActions = [testAction, ...actions]" in js_source
 
 
 def test_release_version_is_synchronized_everywhere():
     version = _version_from_const()
-    assert version == "0.1.24"
+    assert version == "0.1.25"
 
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["version"] == version

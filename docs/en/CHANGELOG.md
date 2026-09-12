@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.25
+- Fixed the device Service card layout: the configured territory is now inserted as its own line directly below `UA Alerts` and above the version.
+- Restored the compact **Test alert** button label; the territory is no longer duplicated in the button or configuration action.
+- Made the frontend helper normalize an already-loaded 0.1.24 action and refresh the visible Service card after the device page updates.
+- Bumped and synchronized release metadata/documentation to 0.1.25.
+
 ## 0.1.24
 - Fixed territory visibility on the Home Assistant device page: the guaranteed-visible test action now includes the configured territory, for example `Test alert · м. Київ`.
 - Expanded the repository landing README to document the current territory model, entities, global timing controls, test mode, Last Alert history/lag, events, installation, diagnostics, and reliability semantics.

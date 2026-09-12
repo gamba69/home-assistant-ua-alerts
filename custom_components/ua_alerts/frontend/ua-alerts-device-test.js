@@ -1,6 +1,7 @@
 const DOMAIN = "ua_alerts";
 const MANUFACTURER = "UA Alerts";
-const PATCH_MARK = Symbol.for("ua-alerts.device-test-action.v1");
+const PATCH_MARK = Symbol.for("ua-alerts.device-test-action.v2");
+const INFO_PATCH_MARK = Symbol.for("ua-alerts.device-territory-info.v1");
 
 const TEXT = {
   en: {
@@ -296,8 +297,9 @@ function addTestDeviceAction(page) {
   const device = hass?.devices?.[page?.deviceId];
   if (!hass?.user?.is_admin || !device || device.manufacturer !== MANUFACTURER) return;
 
-  const actions = [...(page._deviceActions || [])];
-  if (actions.some((action) => action?.uaAlertsTestAction)) return;
+  const actions = [...(page._deviceActions || [])].filter(
+    (action) => !action?.uaAlertsTestAction
+  );
 
   const configIndex = actions.findIndex(
     (action) => typeof action?.href === "string" && action.href.includes(`/config/integrations/integration/${DOMAIN}`)
@@ -313,23 +315,74 @@ function addTestDeviceAction(page) {
     device.name ||
     MANUFACTURER;
   const base = actions[configIndex];
-  actions[configIndex] = {
+  const territorySuffix = ` · ${territoryTitle}`;
+  const cleanBase = {
     ...base,
-    label: `${base.label || MANUFACTURER} · ${territoryTitle}`,
+    label:
+      typeof base.label === "string" && base.label.endsWith(territorySuffix)
+        ? base.label.slice(0, -territorySuffix.length)
+        : base.label,
   };
+  actions[configIndex] = cleanBase;
   const testAction = {
-    ...base,
+    ...cleanBase,
     uaAlertsTestAction: true,
     href: undefined,
     target: undefined,
     trailingIcon: undefined,
-    label: `${stringsFor(hass).action} · ${territoryTitle}`,
+    label: stringsFor(hass).action,
     action: () => openTestDialog(hass, entryId, territoryTitle),
   };
 
   // Keep the original configuration action immediately after the prominent test
   // button, so Configure remains available from the device-page overflow menu.
   page._deviceActions = [testAction, ...actions];
+}
+
+function addTerritoryToInfoCard(card) {
+  const device = card?.device;
+  if (!device || device.manufacturer !== MANUFACTURER) return;
+
+  const root = card.shadowRoot;
+  const manufacturer = root?.querySelector(".manuf");
+  if (!manufacturer) return;
+
+  let territory = root.querySelector(".ua-alerts-territory");
+  if (!territory) {
+    territory = document.createElement("div");
+    territory.className = "extra-info ua-alerts-territory";
+    manufacturer.insertAdjacentElement("afterend", territory);
+  }
+  territory.textContent = device.name || "";
+}
+
+function scheduleTerritoryInfo(page) {
+  const updateComplete = page?.updateComplete;
+  if (!updateComplete?.then) return;
+  updateComplete.then(() => {
+    const card = page.shadowRoot?.querySelector("ha-device-info-card");
+    if (card) addTerritoryToInfoCard(card);
+  });
+}
+
+async function patchDeviceInfoCard() {
+  await customElements.whenDefined("ha-device-info-card");
+  const klass = customElements.get("ha-device-info-card");
+  const proto = klass?.prototype;
+  if (!proto || proto[INFO_PATCH_MARK]) return;
+
+  const originalUpdated = proto.updated;
+  proto.updated = function (...args) {
+    const result = originalUpdated?.apply(this, args);
+    try {
+      addTerritoryToInfoCard(this);
+    } catch (error) {
+      console.warn("UA Alerts: could not add territory to device info card", error);
+    }
+    return result;
+  };
+
+  Object.defineProperty(proto, INFO_PATCH_MARK, { value: true });
 }
 
 async function patchDevicePage() {
@@ -348,8 +401,9 @@ async function patchDevicePage() {
     const result = await original.apply(this, args);
     try {
       addTestDeviceAction(this);
+      scheduleTerritoryInfo(this);
     } catch (error) {
-      console.warn("UA Alerts: could not add device test action", error);
+      console.warn("UA Alerts: could not update device test controls", error);
     }
     return result;
   };
@@ -357,6 +411,9 @@ async function patchDevicePage() {
   Object.defineProperty(proto, PATCH_MARK, { value: true });
 }
 
+patchDeviceInfoCard().catch((error) =>
+  console.warn("UA Alerts: device info helper initialization failed", error)
+);
 patchDevicePage().catch((error) =>
   console.warn("UA Alerts: frontend helper initialization failed", error)
 );
