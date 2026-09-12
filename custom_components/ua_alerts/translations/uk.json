@@ -1156,11 +1156,11 @@
           "red": "Червоний"
         }
       },
-      "last_alert_delay": {
-        "name": "Затримка останньої тривоги"
+      "last_alert_lag": {
+        "name": "Лаг останньої тривоги"
       },
-      "last_threat_delay": {
-        "name": "Затримка останньої загрози"
+      "last_threat_lag": {
+        "name": "Лаг останньої загрози"
       },
       "data_health": {
         "name": "Стан даних",

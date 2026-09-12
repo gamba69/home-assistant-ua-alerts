@@ -307,7 +307,16 @@ function addTestDeviceAction(page) {
   const entryId = uaEntryId(page, device);
   if (!entryId) return;
 
+  const territoryTitle =
+    page?.entries?.find((entry) => entry.entry_id === entryId)?.title ||
+    device.name_by_user ||
+    device.name ||
+    MANUFACTURER;
   const base = actions[configIndex];
+  actions[configIndex] = {
+    ...base,
+    label: `${base.label || MANUFACTURER} · ${territoryTitle}`,
+  };
   const testAction = {
     ...base,
     uaAlertsTestAction: true,
@@ -315,7 +324,7 @@ function addTestDeviceAction(page) {
     target: undefined,
     trailingIcon: undefined,
     label: stringsFor(hass).action,
-    action: () => openTestDialog(hass, entryId, device.name_by_user || device.name || MANUFACTURER),
+    action: () => openTestDialog(hass, entryId, territoryTitle),
   };
 
   // Keep the original configuration action immediately after the prominent test

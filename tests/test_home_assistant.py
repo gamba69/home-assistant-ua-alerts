@@ -225,20 +225,29 @@ async def test_entity_contract_and_states(hass: HomeAssistant):
         "sensor", DOMAIN, "ua_alerts_31_last_alert_level"
     ) == "sensor.ua_31_last_alert_level"
     assert registry.async_get_entity_id(
-        "sensor", DOMAIN, "ua_alerts_31_last_alert_delay"
-    ) == "sensor.ua_31_last_alert_delay"
+        "sensor", DOMAIN, "ua_alerts_31_last_alert_lag"
+    ) == "sensor.ua_31_last_alert_lag"
     assert registry.async_get_entity_id(
-        "sensor", DOMAIN, "ua_alerts_31_last_threat_delay"
-    ) == "sensor.ua_31_last_threat_delay"
+        "sensor", DOMAIN, "ua_alerts_31_last_threat_lag"
+    ) == "sensor.ua_31_last_threat_lag"
     health_id = registry.async_get_entity_id(
         "sensor", DOMAIN, "ua_alerts_31_data_health"
     )
     assert health_id == "sensor.ua_31_health"
     assert hass.states.get(alert_id).state == "red"
     assert hass.states.get(threats_id).state == "drones"
-    assert hass.states.get(alert_id).attributes["level_code"] == "red"
+    assert hass.states.get(alert_id).attributes["alert_scope"] == "direct"
+    assert hass.states.get(alert_id).attributes["alert_source_location_title"] == "м. Київ"
+    assert hass.states.get(alert_id).attributes["alert_source_location_type"] == "city"
+    assert "level_code" not in hass.states.get(alert_id).attributes
+    assert "possible_level_codes" not in hass.states.get(alert_id).attributes
+    assert "alert_source_location_uid" not in hass.states.get(alert_id).attributes
+    assert "active_alert_location_uids" not in hass.states.get(alert_id).attributes
+    assert "test_override" not in hass.states.get(alert_id).attributes
     assert hass.states.get(threats_id).attributes["threat_codes"] == ["drones"]
-    assert hass.states.get(threats_id).attributes["threat_codes_csv"] == "drones"
+    assert "threat_codes_csv" not in hass.states.get(threats_id).attributes
+    assert "possible_threat_codes" not in hass.states.get(threats_id).attributes
+    assert "test_override" not in hass.states.get(threats_id).attributes
     assert hass.states.get(threats_id).attributes["threats"][0]["threat_type"] == "drones"
     assert hass.states.get(air_id).state == "on"
     assert hass.states.get(source_id).state == "on"
@@ -470,19 +479,31 @@ async def test_readded_entry_preserves_custom_deleted_threat_id(hass: HomeAssist
     assert await hass.config_entries.async_unload(config_entry.entry_id)
 
 
-async def test_upgrade_migrates_latency_entity_to_last_alert_delay(
+@pytest.mark.parametrize(
+    ("old_key", "new_key"),
+    (
+        ("alert_latency", "last_alert_lag"),
+        ("last_alert_delay", "last_alert_lag"),
+        ("threat_latency", "last_threat_lag"),
+        ("last_threat_delay", "last_threat_lag"),
+    ),
+)
+async def test_upgrade_migrates_latency_and_delay_entities_to_lag(
     hass: HomeAssistant,
+    old_key: str,
+    new_key: str,
 ):
     session = FakeSession([{"raw": []}])
     config_entry = entry()
     config_entry.add_to_hass(hass)
     registry = er.async_get(hass)
+    old_unique_id = f"ua_alerts_31_{old_key}"
     legacy = registry.async_get_or_create(
         "sensor",
         DOMAIN,
-        "ua_alerts_31_alert_latency",
+        old_unique_id,
         config_entry=config_entry,
-        suggested_object_id="ua_31_alert_latency",
+        suggested_object_id=f"ua_31_{old_key}",
     )
     old_entity_id = legacy.entity_id
 
@@ -494,12 +515,10 @@ async def test_upgrade_migrates_latency_entity_to_last_alert_delay(
         await hass.async_block_till_done()
 
     assert registry.async_get_entity_id(
-        "sensor", DOMAIN, "ua_alerts_31_last_alert_delay"
-    ) == "sensor.ua_31_last_alert_delay"
-    assert registry.async_get_entity_id(
-        "sensor", DOMAIN, "ua_alerts_31_alert_latency"
-    ) is None
-    if old_entity_id != "sensor.ua_31_last_alert_delay":
+        "sensor", DOMAIN, f"ua_alerts_31_{new_key}"
+    ) == f"sensor.ua_31_{new_key}"
+    assert registry.async_get_entity_id("sensor", DOMAIN, old_unique_id) is None
+    if old_entity_id != f"sensor.ua_31_{new_key}":
         assert hass.states.get(old_entity_id) is None
     await hass.config_entries.async_unload(config_entry.entry_id)
 
@@ -705,8 +724,8 @@ async def test_territory_test_override_supports_multiple_threats_without_history
         "cruise_missiles",
         "drones",
     ]
-    assert hass.states.get("sensor.ua_31_level").attributes["test_override"] is True
-    assert hass.states.get("sensor.ua_31_threats").attributes["test_override"] is True
+    assert "test_override" not in hass.states.get("sensor.ua_31_level").attributes
+    assert "test_override" not in hass.states.get("sensor.ua_31_threats").attributes
     assert hass.states.get("sensor.ua_31_last_alert_duration").state == "unavailable"
     assert hass.states.get("sensor.ua_31_last_alert_level").state == "unavailable"
     assert level_events[-1]["new_level"] == "red"
@@ -767,18 +786,20 @@ async def test_last_alert_duration_and_maximum_level(hass: HomeAssistant):
     assert await runtime.async_fetch()
     await hass.async_block_till_done()
 
-    assert float(hass.states.get(duration_id).state) == 229.0
+    assert hass.states.get(duration_id).state == "03:49"
     assert hass.states.get(level_id).state == "red"
-    assert hass.states.get(duration_id).attributes["last_alert_started_at"] == (
+    assert hass.states.get(duration_id).attributes["started_at"] == (
         "2026-09-09T12:00:11+00:00"
     )
-    assert hass.states.get(duration_id).attributes["last_alert_ended_at"] == (
+    assert hass.states.get(duration_id).attributes["ended_at"] == (
         "2026-09-09T12:04:00+00:00"
     )
+    assert hass.states.get(duration_id).attributes["duration_seconds"] == 229.0
+    assert "last_alert_level" not in hass.states.get(level_id).attributes
     await hass.config_entries.async_unload(config_entry.entry_id)
 
 
-async def test_last_alert_delay_is_end_to_end_first_observation_and_does_not_grow(
+async def test_last_alert_lag_is_end_to_end_first_observation_and_does_not_grow(
     hass: HomeAssistant,
 ):
     session = FakeSession([{"raw": [], "cachedat": "2026-09-09 15:00:10"}])
@@ -788,7 +809,7 @@ async def test_last_alert_delay_is_end_to_end_first_observation_and_does_not_gro
 
     registry = er.async_get(hass)
     latency_id = registry.async_get_entity_id(
-        "sensor", DOMAIN, "ua_alerts_31_last_alert_delay"
+        "sensor", DOMAIN, "ua_alerts_31_last_alert_lag"
     )
     assert latency_id is not None
     assert hass.states.get(latency_id).state == "unavailable"
@@ -859,7 +880,7 @@ async def test_upgrade_removes_obsolete_high_churn_diagnostic_entities(
         ) is None
 
     assert registry.async_get_entity_id(
-        "sensor", DOMAIN, "ua_alerts_31_last_alert_delay"
+        "sensor", DOMAIN, "ua_alerts_31_last_alert_lag"
     ) is not None
     await hass.config_entries.async_unload(config_entry.entry_id)
 
@@ -907,13 +928,12 @@ async def test_hromada_inherits_parent_raion_alert(hass: HomeAssistant):
     )
     assert alert_id == "sensor.ua_726_level"
     assert hass.states.get(alert_id).state == "yellow"
-    assert hass.states.get(alert_id).attributes["alert_scope"] == "inherited"
-    assert hass.states.get(alert_id).attributes["alert_source_location_uid"] == "76"
-    assert (
-        hass.states.get(alert_id).attributes["alert_source_location_title"]
-        == "Обухівський район"
-    )
-    assert hass.states.get(alert_id).attributes["active_alert_location_uids"] == ["76"]
+    alert = hass.states.get(alert_id)
+    assert alert.attributes["alert_scope"] == "inherited"
+    assert alert.attributes["alert_source_location_title"] == "Обухівський район"
+    assert alert.attributes["alert_source_location_type"] == "raion"
+    assert "alert_source_location_uid" not in alert.attributes
+    assert "active_alert_location_uids" not in alert.attributes
     assert hass.states.get(threats_id).attributes["threat_codes"] == ["drones"]
 
     assert await hass.config_entries.async_unload(config_entry.entry_id)
@@ -955,32 +975,23 @@ async def test_raion_partial_alert_has_coverage_sensor_and_raw_code_lists(
     )
     assert alert_id == "sensor.ua_76_level"
     assert coverage_id == "sensor.ua_76_coverage"
-    assert hass.states.get(alert_id).state == "red"
-    assert hass.states.get(alert_id).attributes["level_code"] == "red"
-    assert hass.states.get(alert_id).attributes["possible_level_codes"] == [
-        "clear",
-        "yellow",
-        "red",
-    ]
+    alert = hass.states.get(alert_id)
+    assert alert.state == "red"
+    assert alert.attributes["alert_scope"] == "partial"
+    assert alert.attributes["alert_source_location_title"] == "Кагарлицька територіальна громада"
+    assert alert.attributes["alert_source_location_type"] == "hromada"
+    assert "level_code" not in alert.attributes
+    assert "possible_level_codes" not in alert.attributes
 
     coverage = hass.states.get(coverage_id)
     assert coverage is not None
     assert coverage.state == "partial"
-    assert coverage.attributes["coverage_code"] == "partial"
-    assert coverage.attributes["possible_coverage_codes"] == [
-        "none",
-        "full",
-        "partial",
-        "mixed",
-    ]
     assert coverage.attributes["full_level_code"] == "clear"
     assert coverage.attributes["partial_level_code"] == "red"
-    assert coverage.attributes["possible_level_codes"] == [
-        "clear",
-        "yellow",
-        "red",
-    ]
-    assert coverage.attributes["active_full_alert_location_uids"] == []
-    assert coverage.attributes["active_partial_alert_location_uids"] == ["726"]
+    assert "coverage_code" not in coverage.attributes
+    assert "possible_coverage_codes" not in coverage.attributes
+    assert "possible_level_codes" not in coverage.attributes
+    assert "active_full_alert_location_uids" not in coverage.attributes
+    assert "active_partial_alert_location_uids" not in coverage.attributes
 
     assert await hass.config_entries.async_unload(config_entry.entry_id)

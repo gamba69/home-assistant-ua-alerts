@@ -16,44 +16,31 @@ from .const import (
     ALERT_LEVEL_CLEAR,
     ALERT_LEVEL_RED,
     ALERT_LEVEL_YELLOW,
-    ATTR_ACTIVE_ALERT_LOCATION_UIDS,
-    ATTR_ACTIVE_FULL_ALERT_LOCATION_UIDS,
-    ATTR_ACTIVE_PARTIAL_ALERT_LOCATION_UIDS,
     ATTR_ALERT_DETECTED_AT,
     ATTR_ALERT_SCOPE,
     ATTR_ALERT_SOURCE_LOCATION_TITLE,
     ATTR_ALERT_SOURCE_LOCATION_TYPE,
-    ATTR_ALERT_SOURCE_LOCATION_UID,
     ATTR_ALERT_STARTED_AT,
     ATTR_CONSECUTIVE_ERRORS,
-    ATTR_COVERAGE_CODE,
+    ATTR_DURATION_SECONDS,
+    ATTR_ENDED_AT,
     ATTR_FULL_LEVEL_CODE,
     ATTR_HEALTH_DELAY_REASON,
     ATTR_HTTP_STATUS,
-    ATTR_LAST_ALERT_DURATION,
-    ATTR_LAST_ALERT_ENDED_AT,
-    ATTR_LAST_ALERT_LEVEL,
-    ATTR_LAST_ALERT_STARTED_AT,
     ATTR_LAST_ERROR,
     ATTR_LEVEL_CODE,
     ATTR_PARTIAL_LEVEL_CODE,
-    ATTR_POSSIBLE_COVERAGE_CODES,
-    ATTR_POSSIBLE_LEVEL_CODES,
-    ATTR_POSSIBLE_THREAT_CODES,
     ATTR_SOURCE_RESPONSE_TIME,
+    ATTR_STARTED_AT,
     ATTR_THREATS,
     ATTR_THREAT_CODE,
     ATTR_THREAT_CODES,
-    ATTR_THREAT_CODES_CSV,
     ATTR_THREAT_DETECTED_AT,
-    ATTR_THREAT_LEVEL_CODE,
-    ATTR_THREAT_SOURCE_MESSAGE,
     ATTR_THREAT_STARTED_AT,
-    ATTR_TEST_OVERRIDE,
     DATA_HEALTH_OPTIONS,
 )
 from .coordinator import UAAlertsCoordinator
-from .display import THREAT_CODE_ORDER, threat_state_key
+from .display import compact_lag_seconds, format_alert_duration, threat_state_key
 from .entity import UAAlertsEntity
 from .models import LocationState
 
@@ -90,9 +77,6 @@ SENSORS: tuple[UAAlertsSensorDescription, ...] = (
     UAAlertsSensorDescription(
         key="last_alert_duration",
         translation_key="last_alert_duration",
-        device_class=SensorDeviceClass.DURATION,
-        native_unit_of_measurement=UnitOfTime.SECONDS,
-        suggested_display_precision=0,
         value_fn=lambda state: state.last_alert_duration,
     ),
     UAAlertsSensorDescription(
@@ -102,20 +86,18 @@ SENSORS: tuple[UAAlertsSensorDescription, ...] = (
         value_fn=lambda state: state.last_alert_level,
     ),
     UAAlertsSensorDescription(
-        key="last_alert_delay",
-        translation_key="last_alert_delay",
+        key="last_alert_lag",
+        translation_key="last_alert_lag",
         device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement=UnitOfTime.SECONDS,
-        suggested_display_precision=2,
-        value_fn=lambda state: state.alert_latency,
+        value_fn=lambda state: compact_lag_seconds(state.alert_latency),
     ),
     UAAlertsSensorDescription(
-        key="last_threat_delay",
-        translation_key="last_threat_delay",
+        key="last_threat_lag",
+        translation_key="last_threat_lag",
         device_class=SensorDeviceClass.DURATION,
         native_unit_of_measurement=UnitOfTime.SECONDS,
-        suggested_display_precision=2,
-        value_fn=lambda state: state.threat_latency,
+        value_fn=lambda state: compact_lag_seconds(state.threat_latency),
     ),
     UAAlertsSensorDescription(
         key="data_health",
@@ -178,68 +160,49 @@ class UAAlertsSensor(UAAlertsEntity, SensorEntity):
         state = self.coordinator.data
         if self.entity_description.key == "threat_codes":
             return threat_state_key(state.threat_codes)
+        if self.entity_description.key == "last_alert_duration":
+            language = self.hass.config.language if self.hass is not None else None
+            return format_alert_duration(state.last_alert_duration, language)
         return self.entity_description.value_fn(state)
 
     @property
     def extra_state_attributes(self) -> dict[str, Any] | None:
         state = self.coordinator.data
         if self.entity_description.key == "alert_level":
-            return {
-                ATTR_LEVEL_CODE: state.level,
-                ATTR_POSSIBLE_LEVEL_CODES: [
-                    ALERT_LEVEL_CLEAR,
-                    ALERT_LEVEL_YELLOW,
-                    ALERT_LEVEL_RED,
-                ],
+            attributes = {
                 ATTR_ALERT_SCOPE: state.alert_scope,
-                ATTR_ALERT_SOURCE_LOCATION_UID: state.alert_source_location_uid,
                 ATTR_ALERT_SOURCE_LOCATION_TITLE: state.alert_source_location_title,
                 ATTR_ALERT_SOURCE_LOCATION_TYPE: state.alert_source_location_type,
-                ATTR_ACTIVE_ALERT_LOCATION_UIDS: list(state.active_alert_location_uids),
-                ATTR_TEST_OVERRIDE: state.test_override_active,
             }
+            compact = {
+                key: value for key, value in attributes.items() if value is not None
+            }
+            return compact or None
         if self.entity_description.key == "alert_coverage":
             return {
-                ATTR_COVERAGE_CODE: state.coverage_code,
-                ATTR_POSSIBLE_COVERAGE_CODES: list(ALERT_COVERAGE_OPTIONS),
                 ATTR_FULL_LEVEL_CODE: state.full_level_code,
                 ATTR_PARTIAL_LEVEL_CODE: state.partial_level_code,
-                ATTR_POSSIBLE_LEVEL_CODES: [
-                    ALERT_LEVEL_CLEAR,
-                    ALERT_LEVEL_YELLOW,
-                    ALERT_LEVEL_RED,
-                ],
-                ATTR_ACTIVE_FULL_ALERT_LOCATION_UIDS: list(
-                    state.active_full_alert_location_uids
-                ),
-                ATTR_ACTIVE_PARTIAL_ALERT_LOCATION_UIDS: list(
-                    state.active_partial_alert_location_uids
-                ),
             }
         if self.entity_description.key == "threat_codes":
             return {
                 ATTR_THREAT_CODES: list(state.threat_codes),
-                ATTR_THREAT_CODES_CSV: state.threat_codes_state,
-                ATTR_POSSIBLE_THREAT_CODES: list(THREAT_CODE_ORDER),
                 ATTR_THREATS: [threat.as_attribute_dict() for threat in state.threats],
-                ATTR_TEST_OVERRIDE: state.test_override_active,
             }
-        if self.entity_description.key in {"last_alert_duration", "last_alert_level"}:
+        if self.entity_description.key == "last_alert_duration":
             return {
-                ATTR_LAST_ALERT_STARTED_AT: (
+                ATTR_STARTED_AT: (
                     state.last_alert_started_at.isoformat()
                     if state.last_alert_started_at
                     else None
                 ),
-                ATTR_LAST_ALERT_ENDED_AT: (
+                ATTR_ENDED_AT: (
                     state.last_alert_ended_at.isoformat()
                     if state.last_alert_ended_at
                     else None
                 ),
-                ATTR_LAST_ALERT_DURATION: state.last_alert_duration,
-                ATTR_LAST_ALERT_LEVEL: state.last_alert_level,
+                ATTR_DURATION_SECONDS: state.last_alert_duration,
             }
-        if self.entity_description.key == "last_alert_delay":
+        if self.entity_description.key == "last_alert_lag":
             return {
                 ATTR_ALERT_STARTED_AT: (
                     state.latency_alert_started_at.isoformat()
@@ -251,10 +214,9 @@ class UAAlertsSensor(UAAlertsEntity, SensorEntity):
                 ),
                 ATTR_LEVEL_CODE: state.alert_latency_level,
             }
-        if self.entity_description.key == "last_threat_delay":
+        if self.entity_description.key == "last_threat_lag":
             return {
                 ATTR_THREAT_CODE: state.threat_latency_code,
-                ATTR_THREAT_LEVEL_CODE: state.threat_latency_level,
                 ATTR_THREAT_STARTED_AT: (
                     state.threat_latency_started_at.isoformat()
                     if state.threat_latency_started_at
@@ -265,7 +227,6 @@ class UAAlertsSensor(UAAlertsEntity, SensorEntity):
                     if state.threat_detected_at
                     else None
                 ),
-                ATTR_THREAT_SOURCE_MESSAGE: state.threat_latency_source_message,
             }
         if self.entity_description.key == "data_health":
             return {

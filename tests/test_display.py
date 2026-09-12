@@ -76,3 +76,20 @@ def test_russian_threat_labels_are_maximally_compact():
         "ru",
         alert_level="yellow",
     ) == "Тактическая, Баллистика, БПЛА"
+
+
+def test_compact_lag_seconds_uses_decimals_only_below_one_second():
+    assert display.compact_lag_seconds(None) is None
+    assert display.compact_lag_seconds(21.27) == 21
+    assert display.compact_lag_seconds(3.81) == 4
+    assert display.compact_lag_seconds(0.73) == 0.73
+    assert display.compact_lag_seconds(0.08) == 0.08
+
+
+def test_alert_duration_format_is_compact_and_adaptive():
+    assert display.format_alert_duration(47, "ru") == "00:47"
+    assert display.format_alert_duration(477, "ru") == "07:57"
+    assert display.format_alert_duration(3661, "ru") == "1:01:01"
+    assert display.format_alert_duration(3605, "ru") == "1:00:05"
+    assert display.format_alert_duration(90061, "ru") == "1д 01:01:01"
+    assert display.format_alert_duration(172980, "en") == "2d 00:03:00"

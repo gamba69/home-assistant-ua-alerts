@@ -12,7 +12,7 @@ The integration uses the token-free Ubilling proxy for `alerts.in.ua` raw data:
 - Domain: `ua_alerts`
 - Integration directory: `custom_components/ua_alerts/`
 - Repository: `gamba69/home-assistant-ua-alerts`
-- Current release: **0.1.22**
+- Current release: **0.1.23**
 
 
 ## Highlights
@@ -24,7 +24,7 @@ The integration uses the token-free Ubilling proxy for `alerts.in.ua` raw data:
 - domain-wide configurable polling/stale timing (defaults: 3 s / 15 s);
 - air-raid level derived only from the source `alert_level` field;
 - administrative alert inheritance: oblast -> raion -> hromada, with no false upward propagation;
-- threat aggregation/de-duplication plus persistent last-alert state and end-to-end delay measurements;
+- threat aggregation/de-duplication plus persistent last-alert state and compact end-to-end lag measurements;
 - RU / UK / EN translations;
 - no API token required;
 - HACS-ready repository layout.
@@ -58,7 +58,7 @@ Coverage codes are:
 - `partial`: there is no whole-territory alert, but one or more descendants are active;
 - `mixed`: the whole territory has one level and at least one descendant has a higher level (for example, raion-wide yellow plus one hromada red).
 
-For transparency, the alert-level entity exposes `alert_scope`, `alert_source_location_uid`, `alert_source_location_title`, `alert_source_location_type`, and `active_alert_location_uids`. `alert_scope=partial` identifies an effective level whose decisive source is a descendant. For example, if Obukhiv raion (UID `76`) is yellow while Kaharlyk hromada (UID `726`) has no separate raw row, `sensor.ua_726_level` is still yellow with `alert_scope=inherited` and source UID `76`. Conversely, if only Kaharlyk is red and Obukhiv raion is configured, the raion reports level `red` with coverage `partial`, not a fictitious raion-wide red alert.
+For transparency without attribute clutter, the alert-level entity exposes only `alert_scope`, `alert_source_location_title`, and `alert_source_location_type`. `alert_scope=partial` identifies an effective level whose decisive source is a descendant. Detailed source UIDs and active-location lists remain available in integration events and diagnostics instead of being duplicated on every entity state.
 
 The catalog is **never refreshed automatically**. Use **Configure → Refresh territory catalog** on any UA Alerts entry only when you explicitly want to replace the bundled/stored snapshot with a freshly downloaded official alerts.in.ua catalog. A successful manual refresh is stored locally and reused indefinitely; a failed refresh never replaces the last valid catalog.
 
@@ -68,28 +68,26 @@ Once this repository contains the integration files, add it to HACS as a custom 
 
 ## Entities
 
-Nine entities are enabled by default for a configured hromada or standalone city. Raion and oblast entries get a tenth operational entity, `alert_coverage`, because those territories can be only partially active. Entity IDs use only the stable alerts.in.ua territory UID and a short technical suffix, so they do not contain a transliterated territory name. For example, Kyiv uses `sensor.ua_31_level`, while Kaharlyk hromada uses `sensor.ua_726_level`. Internal Home Assistant `unique_id` values remain stable after the one-time 0.1.20 latency-to-delay migration. On upgrade, untouched automatically generated legacy entity IDs are shortened automatically; this also covers old IDs restored by Home Assistant after a territory is removed and re-added. Manually renamed entity IDs are preserved.
+Eleven entities are enabled by default for a configured hromada or standalone city, including the two editable global timing numbers. Raion and oblast entries get a twelfth operational entity, `alert_coverage`, because those territories can be only partially active. Entity IDs use only the stable alerts.in.ua territory UID and a short technical suffix. The 0.1.23 upgrade migrates previous latency/delay unique IDs to the new lag names; untouched automatic entity IDs are renamed accordingly, while manually renamed entity IDs are preserved.
 
 | Entity | Purpose |
 | --- | --- |
-| `sensor.ua_<uid>_level` | localized alert level; stable technical code is exposed as `level_code`, with `possible_level_codes` listing `clear`, `yellow`, `red` |
-| `sensor.ua_<uid>_coverage` | raion/oblast only: localized coverage state (`none`, `full`, `partial`, `mixed`) with raw coverage and component level codes in attributes |
+| `sensor.ua_<uid>_level` | localized alert level; attributes keep only scope and human-readable source territory context |
+| `sensor.ua_<uid>_coverage` | raion/oblast only: coverage state (`none`, `full`, `partial`, `mixed`) plus `full_level_code` / `partial_level_code` |
 | `binary_sensor.ua_<uid>_alert` | on for yellow/red, off for clear |
-| `sensor.ua_<uid>_threats` | localized threat names; raw English codes are exposed as attributes |
+| `sensor.ua_<uid>_threats` | localized threat state; attributes keep active `threat_codes` and detailed `threats` only |
 | `binary_sensor.ua_<uid>_source` | source freshness/availability |
-| `sensor.ua_<uid>_last_alert_duration` | duration of the latest fully observed completed alert |
+| `sensor.ua_<uid>_last_alert_duration` | compact `MM:SS`, `H:MM:SS`, or `Dd HH:MM:SS`; raw seconds stay in `duration_seconds` |
 | `sensor.ua_<uid>_last_alert_level` | maximum level reached by the latest fully observed completed alert |
-| `sensor.ua_<uid>_last_alert_delay` | end-to-end delay from source `Alert.started_at` to the first snapshot in which HA observes the new alert |
-| `sensor.ua_<uid>_last_threat_delay` | end-to-end delay from the latest newly appeared `Threat.started_at` to the first snapshot in which HA observes that threat |
+| `sensor.ua_<uid>_last_alert_lag` | end-to-end lag from source `Alert.started_at` to the first snapshot in which HA observes the new alert |
+| `sensor.ua_<uid>_last_threat_lag` | end-to-end lag from the latest newly appeared `Threat.started_at` to the first snapshot in which HA observes that threat |
 | `sensor.ua_<uid>_health` | aggregate data status: normal / delayed / source error / data error |
 
-`last_alert_delay` is measured only on a valid `clear -> yellow/red` transition and then frozen. It does not grow while the same alert remains active. If Home Assistant starts while an alert is already active, no alert latency is fabricated; the integration waits for a later clear state and the next alert.
+`last_alert_lag` is measured only on a valid `clear -> yellow/red` transition and then frozen. `last_threat_lag` similarly measures a newly appearing threat instance. Values of 1 second or more are shown as whole seconds; sub-second values keep up to two decimal places. Both sensors keep their last valid measurements after clear and persist them per territory UID.
 
-`last_threat_delay` is measured for each newly appearing threat instance as `Threat.started_at -> first HA snapshot containing that threat`. The sensor exposes the **latest measured threat latency**. Existing threats present when Home Assistant starts establish the baseline and are not misreported as huge latency values; a threat that appears later during the same active alert is measured normally. A level-only change of the same threat (`threat_type` + same `started_at`) does not create a fake new measurement. If several new threats arrive in one snapshot, the threat with the latest `started_at` becomes the displayed measurement. Both delay sensors keep their last valid values after the alert clears **and are persisted per territory UID**, so their values and measurement attributes are restored after a Home Assistant restart. Restored values do not establish a fake alert/threat transition: startup during an already-active alert still only establishes the live baseline.
+`data_health` is the at-a-glance diagnostic entity. It remains available even when operational entities do not. Its attributes are intentionally limited to sampled source response time, consecutive poll errors, HTTP status, last error, and technical delay reason. Alert/threat end-to-end lag is informational and never makes data health `delayed`; that state is reserved for a slow HTTP response.
 
-`data_health` is the at-a-glance diagnostic entity. It remains available even when operational entities do not. Its state is `normal`, `delayed`, `source_error`, or `data_error`, localized by Home Assistant. It exposes the last alert latency, last threat latency, sampled source response time, consecutive poll error count, HTTP status, last error, and a technical delay reason. To avoid recreating the old 3-second diagnostic noise, volatile details are sampled at most every 30 seconds unless the health state/reason, error, or measured latency changes. **Alert/threat end-to-end latency is informational and never marks data health as delayed**, because the integration cannot distinguish upstream publication delay from normal source behavior. `delayed` is reserved for a slow HTTP response from the configured source (1.5 s or slower).
-
-The last-threat-delay attributes expose the stable technical threat code, threat level code, source start time, HA detection time, and source message.
+`last_threat_lag` exposes only the threat code, source start time, and HA detection time. `last_alert_lag` exposes the source start time, HA detection time, and measured level. The duration sensor exposes only `started_at`, `ended_at`, and numeric `duration_seconds`; `last_alert_level` has no custom attributes.
 
 Upgrades from <= 0.1.4 automatically remove the old high-churn diagnostic entities (`received_at`, `data_age`, and the three previous latency variants), so they no longer spam Home Assistant history/activity.
 
@@ -99,11 +97,9 @@ The integration explicitly suggests the short UID-based object IDs above; regist
 
 User-facing states are localized where appropriate, while automations can use stable English technical values:
 
-- alert level: `level_code` = `clear`, `yellow`, or `red`; `possible_level_codes` contains the complete stable list;
-- alert coverage (raion/oblast): `coverage_code` = `none`, `full`, `partial`, or `mixed`; `possible_coverage_codes` contains the complete stable list;
-- coverage also exposes `full_level_code` and `partial_level_code`, plus `possible_level_codes`, so automations can distinguish a whole-territory baseline from the highest child-only level;
-- threats: `threat_codes` = list of currently active raw codes, `threat_codes_csv` = comma-separated active codes (or `none`), and `possible_threat_codes` = the complete supported threat-code list (`tactic_aircraft_activity`, `strategic_aircraft_activity`, `mig31k_departure`, `ballistic_missiles`, `cruise_missiles`, `unspecified_missiles`, `drones`, `guided_aerial_bombs`, `air_defense`, `unknown`);
-- detailed `threats` attributes keep raw `threat_type` and `level` values.
+- alert level: the entity state itself is the stable `clear`, `yellow`, or `red` code; custom attributes only explain scope/source territory;
+- alert coverage (raion/oblast): the state itself is `none`, `full`, `partial`, or `mixed`; `full_level_code` and `partial_level_code` preserve the whole-territory/child distinction;
+- threats: `threat_codes` is the active raw-code list and `threats` keeps the detailed source records; redundant CSV/possible-code copies are no longer attached to every state.
 
 Known threat labels cover the current alerts.in.ua threat enum. A future unknown code is shown simply as an unknown threat; its raw code remains available in the machine-readable attributes and is never discarded.
 

@@ -4,7 +4,7 @@ Home Assistant integration for Ukrainian air alerts with `clear` / `yellow` / `r
 alert levels, threat details, multi-area support, administrative coverage, and
 token-free polling.
 
-**Current release:** `0.1.22` · **Domain:** `ua_alerts`
+**Current release:** `0.1.23` · **Domain:** `ua_alerts`
 
 **English:** [Documentation](docs/en/README.md) · [Changelog](docs/en/CHANGELOG.md)
 

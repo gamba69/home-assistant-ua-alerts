@@ -1156,11 +1156,11 @@
           "red": "Red"
         }
       },
-      "last_alert_delay": {
-        "name": "Last alert delay"
+      "last_alert_lag": {
+        "name": "Last alert lag"
       },
-      "last_threat_delay": {
-        "name": "Last threat delay"
+      "last_threat_lag": {
+        "name": "Last threat lag"
       },
       "data_health": {
         "name": "Data status",

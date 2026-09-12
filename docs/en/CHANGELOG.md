@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.1.23
+- Added the configured territory directly to the device service-card configuration row, so the entry is immediately identifiable (for example `UA Alerts · м. Київ`).
+- Renamed `Last alert delay` / `Last threat delay` to `Last alert lag` / `Last threat lag`, including entity keys/IDs and event aliases, with safe registry migration from both older latency names and 0.1.20–0.1.22 delay names.
+- Lag values now use whole seconds at 1 s and above, and up to two decimal places only below 1 s. Last-alert duration now uses compact `MM:SS`, `H:MM:SS`, or localized-day `Dd HH:MM:SS` formatting while retaining raw `duration_seconds`.
+- Removed redundant entity attributes that duplicated state, possible-value lists, source UIDs, and test markers; retained only useful context and machine-readable details.
+
 ## 0.1.22
 - Added a prominent **Test alert** action directly to every UA Alerts territory device page for administrators.
 - The action opens a compact territory-scoped dialog with alert level and multi-threat selection; the territory is taken from the device automatically.

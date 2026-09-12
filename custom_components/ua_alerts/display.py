@@ -103,6 +103,12 @@ _UNKNOWN_THREAT_PREFIX = {
     "uk": "Невідома загроза",
 }
 
+_DAY_SUFFIX = {
+    "en": "d",
+    "ru": "д",
+    "uk": "д",
+}
+
 THREAT_CODE_ORDER = (
     "tactic_aircraft_activity",
     "strategic_aircraft_activity",
@@ -140,6 +146,33 @@ def normalize_language(language: str | None) -> str:
         return "en"
     normalized = language.replace("_", "-").split("-", 1)[0].casefold()
     return normalized if normalized in _SUPPORTED_LANGUAGES else "en"
+
+
+def compact_lag_seconds(seconds: float | None) -> int | float | None:
+    """Keep lag compact: whole seconds from 1 s, decimals only below 1 s."""
+    if seconds is None:
+        return None
+    if seconds == 0:
+        return 0
+    if seconds >= 1:
+        return int(round(seconds))
+    return round(seconds, 2)
+
+
+def format_alert_duration(seconds: float | None, language: str | None) -> str | None:
+    """Format an alert duration without meaningless leading zero components."""
+    if seconds is None:
+        return None
+    total = max(0, int(round(seconds)))
+    days, remainder = divmod(total, 24 * 60 * 60)
+    hours, remainder = divmod(remainder, 60 * 60)
+    minutes, secs = divmod(remainder, 60)
+    if days:
+        suffix = _DAY_SUFFIX[normalize_language(language)]
+        return f"{days}{suffix} {hours:02d}:{minutes:02d}:{secs:02d}"
+    if hours:
+        return f"{hours}:{minutes:02d}:{secs:02d}"
+    return f"{minutes:02d}:{secs:02d}"
 
 
 def location_type_label(code: str, language: str | None) -> str:

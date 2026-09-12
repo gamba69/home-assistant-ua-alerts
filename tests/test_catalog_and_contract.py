@@ -58,7 +58,7 @@ def test_exact_entity_contract_no_extras():
     sensor_source = (INTEGRATION / "sensor.py").read_text(encoding="utf-8")
     binary_source = (INTEGRATION / "binary_sensor.py").read_text(encoding="utf-8")
     number_source = (INTEGRATION / "number.py").read_text(encoding="utf-8")
-    for key in ("alert_level", "alert_coverage", "threat_codes", "last_alert_duration", "last_alert_level", "last_alert_delay", "last_threat_delay", "data_health"):
+    for key in ("alert_level", "alert_coverage", "threat_codes", "last_alert_duration", "last_alert_level", "last_alert_lag", "last_threat_lag", "data_health"):
         assert f'key="{key}"' in sensor_source
     for removed in (
         "data_age", "event_time", "source_updated", "received_at",
@@ -168,14 +168,17 @@ def test_catalog_refresh_is_not_part_of_alert_polling_runtime():
     assert "CATALOG_URL" not in runtime_source
 
 
-def test_user_facing_threats_keep_technical_codes_in_attributes():
+def test_user_facing_states_keep_only_useful_machine_readable_attributes():
     source = (INTEGRATION / "sensor.py").read_text(encoding="utf-8")
     display = (INTEGRATION / "display.py").read_text(encoding="utf-8")
     assert "threat_state_key" in source
-    assert "hass.config.language" not in source
-    assert "ATTR_LEVEL_CODE" in source
+    assert "format_alert_duration" in source
     assert "ATTR_THREAT_CODES" in source
-    assert "ATTR_THREAT_CODES_CSV" in source
+    assert "ATTR_THREATS" in source
+    assert "ATTR_THREAT_CODES_CSV" not in source
+    assert "ATTR_POSSIBLE_THREAT_CODES" not in source
+    assert "ATTR_POSSIBLE_LEVEL_CODES" not in source
+    assert "ATTR_POSSIBLE_COVERAGE_CODES" not in source
     for code in (
         "tactic_aircraft_activity", "strategic_aircraft_activity", "mig31k_departure",
         "ballistic_missiles", "cruise_missiles", "unspecified_missiles", "drones",
