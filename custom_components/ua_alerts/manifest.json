@@ -1,12 +1,16 @@
 {
   "domain": "ua_alerts",
   "name": "UA Alerts",
+  "after_dependencies": [
+    "frontend"
+  ],
   "codeowners": [
     "@gamba69"
   ],
   "config_flow": true,
   "dependencies": [
-    "frontend"
+    "http",
+    "websocket_api"
   ],
   "documentation": "https://github.com/gamba69/home-assistant-ua-alerts",
   "integration_type": "service",

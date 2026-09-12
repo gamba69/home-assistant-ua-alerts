@@ -27,6 +27,7 @@ def test_device_page_test_dialog_contract():
     assert "async_register_websocket_handlers" in init_source
     assert "add_extra_js_url" in frontend_source
     assert "async_register_static_paths" in frontend_source
+    assert "async_when_setup" in frontend_source
     assert '"ua_alerts/test/get"' in websocket_source
     assert '"ua_alerts/test/set"' in websocket_source
     assert "@websocket_api.require_admin" in websocket_source
@@ -46,6 +47,9 @@ def test_release_version_is_synchronized_everywhere():
 
     manifest = json.loads((INTEGRATION / "manifest.json").read_text(encoding="utf-8"))
     assert manifest["version"] == version
+    assert manifest["dependencies"] == ["http", "websocket_api"]
+    assert manifest["after_dependencies"] == ["frontend"]
+    assert "frontend" not in manifest["dependencies"]
 
     root_readme = (ROOT / "README.md").read_text(encoding="utf-8")
     assert f"**Current release:** `{version}`" in root_readme
