@@ -623,10 +623,10 @@ async def test_global_timing_number_entities_sync_every_territory(
     await setup_with_session(hass, first, session)
     await setup_with_session(hass, second, session)
 
-    assert float(hass.states["number.ua_31_poll"].state) == 3.0
-    assert float(hass.states["number.ua_14_poll"].state) == 3.0
-    assert float(hass.states["number.ua_31_stale"].state) == 15.0
-    assert float(hass.states["number.ua_14_stale"].state) == 15.0
+    assert float(hass.states.get("number.ua_31_poll").state) == 3.0
+    assert float(hass.states.get("number.ua_14_poll").state) == 3.0
+    assert float(hass.states.get("number.ua_31_stale").state) == 15.0
+    assert float(hass.states.get("number.ua_14_stale").state) == 15.0
 
     await hass.services.async_call(
         "number",
@@ -636,8 +636,8 @@ async def test_global_timing_number_entities_sync_every_territory(
     )
     await hass.async_block_till_done()
     assert first.runtime_data.runtime.poll_interval == 5
-    assert float(hass.states["number.ua_31_poll"].state) == 5.0
-    assert float(hass.states["number.ua_14_poll"].state) == 5.0
+    assert float(hass.states.get("number.ua_31_poll").state) == 5.0
+    assert float(hass.states.get("number.ua_14_poll").state) == 5.0
     assert first.options["poll_interval"] == 5
     assert second.options["poll_interval"] == 5
 
@@ -649,8 +649,8 @@ async def test_global_timing_number_entities_sync_every_territory(
     )
     await hass.async_block_till_done()
     assert first.runtime_data.runtime.stale_after == 20
-    assert float(hass.states["number.ua_31_stale"].state) == 20.0
-    assert float(hass.states["number.ua_14_stale"].state) == 20.0
+    assert float(hass.states.get("number.ua_31_stale").state) == 20.0
+    assert float(hass.states.get("number.ua_14_stale").state) == 20.0
     assert first.options["stale_after"] == 20
     assert second.options["stale_after"] == 20
 
@@ -695,20 +695,20 @@ async def test_territory_test_override_supports_multiple_threats_without_history
     assert result["type"] is FlowResultType.ABORT
     await hass.async_block_till_done()
 
-    assert hass.states["sensor.ua_31_level"].state == "red"
-    assert hass.states["binary_sensor.ua_31_alert"].state == "on"
+    assert hass.states.get("sensor.ua_31_level").state == "red"
+    assert hass.states.get("binary_sensor.ua_31_alert").state == "on"
     assert (
-        hass.states["sensor.ua_31_threats"].state
+        hass.states.get("sensor.ua_31_threats").state
         == "cruise_missiles_and_drones"
     )
-    assert hass.states["sensor.ua_31_threats"].attributes["threat_codes"] == [
+    assert hass.states.get("sensor.ua_31_threats").attributes["threat_codes"] == [
         "cruise_missiles",
         "drones",
     ]
-    assert hass.states["sensor.ua_31_level"].attributes["test_override"] is True
-    assert hass.states["sensor.ua_31_threats"].attributes["test_override"] is True
-    assert hass.states["sensor.ua_31_last_alert_duration"].state == "unavailable"
-    assert hass.states["sensor.ua_31_last_alert_level"].state == "unavailable"
+    assert hass.states.get("sensor.ua_31_level").attributes["test_override"] is True
+    assert hass.states.get("sensor.ua_31_threats").attributes["test_override"] is True
+    assert hass.states.get("sensor.ua_31_last_alert_duration").state == "unavailable"
+    assert hass.states.get("sensor.ua_31_last_alert_level").state == "unavailable"
     assert level_events[-1]["new_level"] == "red"
     assert level_events[-1]["test_override"] is True
     assert threat_events[-1]["threat_codes"] == "cruise_missiles,drones"
@@ -725,11 +725,11 @@ async def test_territory_test_override_supports_multiple_threats_without_history
     assert result["type"] is FlowResultType.ABORT
     await hass.async_block_till_done()
 
-    assert hass.states["sensor.ua_31_level"].state == "clear"
-    assert hass.states["binary_sensor.ua_31_alert"].state == "off"
-    assert hass.states["sensor.ua_31_threats"].state == "none"
-    assert hass.states["sensor.ua_31_last_alert_duration"].state == "unavailable"
-    assert hass.states["sensor.ua_31_last_alert_level"].state == "unavailable"
+    assert hass.states.get("sensor.ua_31_level").state == "clear"
+    assert hass.states.get("binary_sensor.ua_31_alert").state == "off"
+    assert hass.states.get("sensor.ua_31_threats").state == "none"
+    assert hass.states.get("sensor.ua_31_last_alert_duration").state == "unavailable"
+    assert hass.states.get("sensor.ua_31_last_alert_level").state == "unavailable"
 
     await hass.config_entries.async_unload(config_entry.entry_id)
 
