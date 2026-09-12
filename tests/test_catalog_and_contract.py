@@ -239,9 +239,11 @@ def test_last_alert_state_sensor_contract():
 
     for key in (
         "last_alert_duration", "last_alert_level",
-        "last_alert_delay", "last_threat_delay",
+        "last_alert_lag", "last_threat_lag",
     ):
         assert f'key="{key}"' in sensor_source
+    assert 'key="last_alert_delay"' not in sensor_source
+    assert 'key="last_threat_delay"' not in sensor_source
     assert 'key="alert_latency"' not in sensor_source
     assert 'key="threat_latency"' not in sensor_source
     assert "AlertHistoryTracker" in coordinator_source
@@ -254,15 +256,15 @@ def test_translation_catalogues_have_last_alert_state_names():
     expected = {
         "en": (
             "Last alert duration", "Last alert level",
-            "Last alert delay", "Last threat delay",
+            "Last alert lag", "Last threat lag",
         ),
         "ru": (
             "Длительность последней тревоги", "Уровень последней тревоги",
-            "Задержка последней тревоги", "Задержка последней угрозы",
+            "Лаг последней тревоги", "Лаг последней угрозы",
         ),
         "uk": (
             "Тривалість останньої тривоги", "Рівень останньої тривоги",
-            "Затримка останньої тривоги", "Затримка останньої загрози",
+            "Лаг останньої тривоги", "Лаг останньої загрози",
         ),
     }
     for lang, names in expected.items():
@@ -272,9 +274,11 @@ def test_translation_catalogues_have_last_alert_state_names():
         sensors = data["entity"]["sensor"]
         keys = (
             "last_alert_duration", "last_alert_level",
-            "last_alert_delay", "last_threat_delay",
+            "last_alert_lag", "last_threat_lag",
         )
         assert tuple(sensors[key]["name"] for key in keys) == names
+        assert "last_alert_delay" not in sensors
+        assert "last_threat_delay" not in sensors
         assert "alert_latency" not in sensors
         assert "threat_latency" not in sensors
 
@@ -344,8 +348,8 @@ def test_short_entity_id_contract_and_unique_ids_stay_stable():
         "threat_codes": "threats",
         "last_alert_duration": "last_alert_duration",
         "last_alert_level": "last_alert_level",
-        "last_alert_delay": "last_alert_delay",
-        "last_threat_delay": "last_threat_delay",
+        "last_alert_lag": "last_alert_lag",
+        "last_threat_lag": "last_threat_lag",
         "data_health": "health",
         "air_alert": "alert",
         "source_available": "source",
@@ -355,10 +359,12 @@ def test_short_entity_id_contract_and_unique_ids_stay_stable():
         assert f'"{key}":' in ids_source
         assert f'"{suffix}"' in ids_source
 
+    assert '"last_alert_delay":' not in ids_source
+    assert '"last_threat_delay":' not in ids_source
     assert "def suggested_object_id" in entity_source
     assert "short_object_id(self.coordinator.location_uid, self._key)" in entity_source
 
-    # Internal unique IDs stay unchanged for registry continuity.
+    # Internal unique IDs use the current entity key; migrations preserve registry continuity.
     assert 'self._attr_unique_id = f"{DOMAIN}_{coordinator.location_uid}_{key}"' in entity_source
 
     # Existing automatic IDs are migrated, but user-renamed IDs are preserved.
@@ -436,14 +442,20 @@ def test_health_does_not_classify_end_to_end_latency_as_delayed():
     assert "Upstream publication delay" in health_source
 
 
-def test_alert_level_exposes_possible_machine_codes():
+def test_alert_level_keeps_only_useful_source_context_attributes():
     sensor_source = (INTEGRATION / "sensor.py").read_text(encoding="utf-8")
-    const_source = (INTEGRATION / "const.py").read_text(encoding="utf-8")
-    assert 'ATTR_POSSIBLE_LEVEL_CODES = "possible_level_codes"' in const_source
-    assert "ATTR_POSSIBLE_LEVEL_CODES" in sensor_source
-    assert "ALERT_LEVEL_CLEAR" in sensor_source
-    assert "ALERT_LEVEL_YELLOW" in sensor_source
-    assert "ALERT_LEVEL_RED" in sensor_source
+    for name in (
+        "ATTR_ALERT_SCOPE",
+        "ATTR_ALERT_SOURCE_LOCATION_TITLE",
+        "ATTR_ALERT_SOURCE_LOCATION_TYPE",
+    ):
+        assert name in sensor_source
+    for removed in (
+        "ATTR_POSSIBLE_LEVEL_CODES",
+        "ATTR_ALERT_SOURCE_LOCATION_UID",
+        "ATTR_ACTIVE_ALERT_LOCATION_UIDS",
+    ):
+        assert removed not in sensor_source
 
 
 def test_alert_coverage_sensor_is_for_raion_and_oblast_only():
@@ -481,18 +493,18 @@ def test_alert_coverage_translations_are_frontend_enum_states():
         }
 
 
-def test_alert_coverage_exposes_machine_codes_and_components():
+def test_alert_coverage_keeps_only_component_level_attributes():
     sensor_source = (INTEGRATION / "sensor.py").read_text(encoding="utf-8")
-    for name in (
+    assert "ATTR_FULL_LEVEL_CODE" in sensor_source
+    assert "ATTR_PARTIAL_LEVEL_CODE" in sensor_source
+    for removed in (
         "ATTR_COVERAGE_CODE",
         "ATTR_POSSIBLE_COVERAGE_CODES",
-        "ATTR_FULL_LEVEL_CODE",
-        "ATTR_PARTIAL_LEVEL_CODE",
         "ATTR_POSSIBLE_LEVEL_CODES",
         "ATTR_ACTIVE_FULL_ALERT_LOCATION_UIDS",
         "ATTR_ACTIVE_PARTIAL_ALERT_LOCATION_UIDS",
     ):
-        assert name in sensor_source
+        assert removed not in sensor_source
 
 
 def test_russian_frontend_threat_states_use_compact_labels():
@@ -511,11 +523,16 @@ def test_russian_frontend_threat_states_use_compact_labels():
     assert states["tactic_aircraft_activity_and_ballistic_missiles_and_drones"] == "Тактическая, Баллистика, БПЛА"
 
 
-def test_threat_sensor_exposes_all_possible_machine_codes():
+def test_threat_sensor_keeps_active_codes_and_details_only():
     sensor_source = (INTEGRATION / "sensor.py").read_text(encoding="utf-8")
     const_source = (INTEGRATION / "const.py").read_text(encoding="utf-8")
-    assert 'ATTR_POSSIBLE_THREAT_CODES = "possible_threat_codes"' in const_source
-    assert "ATTR_POSSIBLE_THREAT_CODES: list(THREAT_CODE_ORDER)" in sensor_source
+    assert 'ATTR_THREAT_CODES = "threat_codes"' in const_source
+    assert 'ATTR_THREATS = "threats"' in const_source
+    assert "ATTR_THREAT_CODES: list(state.threat_codes)" in sensor_source
+    assert "ATTR_THREATS: [threat.as_attribute_dict()" in sensor_source
+    assert "ATTR_POSSIBLE_THREAT_CODES" not in sensor_source
+    assert "ATTR_THREAT_CODES_CSV" not in sensor_source
+    assert "ATTR_TEST_OVERRIDE" not in sensor_source
 
 
 def test_possible_threat_code_order_matches_current_alerts_enum():
